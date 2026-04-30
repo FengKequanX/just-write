@@ -213,7 +213,17 @@ Use the baoyu-post-to-wechat skill for publishing.
 
 ### 发布命令
 
-Run the baoyu-post-to-wechat API script using `bun`:
+Before publishing, ensure the baoyu-post-to-wechat script dependencies are installed:
+
+```bash
+# First time only: install script dependencies
+SCRIPT_DIR=<plugin-dir>/skills/baoyu-post-to-wechat/scripts
+if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+  bun install --cwd "$SCRIPT_DIR"
+fi
+```
+
+Then publish:
 
 ```bash
 bun <plugin-dir>/skills/baoyu-post-to-wechat/scripts/wechat-api.ts \
