@@ -1,0 +1,12 @@
+{
+  "name": "just-write",
+  "version": "1.0.0",
+  "description": "那就开写吧——把你的想法变成可发布的文章。AI辅助但不代替，你的思路，你的表达。",
+  "author": {
+    "name": "炙青"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/FengKequanX/just-write",
+  "repository": "https://github.com/FengKequanX/just-write",
+  "keywords": ["writing", "wechat", "公众号", "content-creation", "publishing", "文章", "写作"]
+}
