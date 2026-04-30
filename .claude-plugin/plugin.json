@@ -5,8 +5,10 @@
   "author": {
     "name": "炙青"
   },
-  "license": "MIT",
   "homepage": "https://github.com/FengKequanX/just-write",
   "repository": "https://github.com/FengKequanX/just-write",
-  "keywords": ["writing", "wechat", "公众号", "content-creation", "publishing", "文章", "写作"]
+  "license": "MIT",
+  "keywords": ["writing", "wechat", "公众号", "content-creation", "publishing"],
+  "skills": ["./skills/"],
+  "commands": ["./commands/"]
 }
