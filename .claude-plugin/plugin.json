@@ -9,6 +9,5 @@
   "repository": "https://github.com/FengKequanX/just-write",
   "license": "MIT",
   "keywords": ["writing", "wechat", "公众号", "content-creation", "publishing"],
-  "skills": ["./skills/"],
-  "commands": ["./commands/"]
+  "skills": ["./skills/"]
 }
