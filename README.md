@@ -10,11 +10,9 @@
 
 # 2. 安装插件
 /plugin install just-write
-
-# 3. 安装运行时依赖（仅需执行一次）
-cd ~/.claude/plugins/cache/just-write/plugins/just-write/skills/baoyu-post-to-wechat/scripts
-bun install
 ```
+
+发布时 Agent 自动安装脚本依赖，无需手动操作。
 
 ## 前置条件
 
