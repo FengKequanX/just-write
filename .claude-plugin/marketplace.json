@@ -1,0 +1,24 @@
+{
+  "name": "just-write",
+  "description": "那就开写吧——把你的想法变成可发布的文章。AI辅助但不代替，你的思路，你的表达。",
+  "version": "1.0.0",
+  "owner": {
+    "name": "炙青"
+  },
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "just-write",
+      "source": "just-write",
+      "version": "1.0.0",
+      "description": "那就开写吧——把你的想法变成可发布的文章。支持微信公众号全流程：头脑风暴、标题生成、内容创作与修正、AI去痕润色、配图设计、一键发布。未来将支持小红书等更多平台。AI是拐杖不是腿——思路是你的，它帮你走。",
+      "author": {
+        "name": "炙青"
+      },
+      "license": "MIT",
+      "keywords": ["writing", "wechat", "公众号", "content-creation", "publishing", "文章", "写作"]
+    }
+  ]
+}

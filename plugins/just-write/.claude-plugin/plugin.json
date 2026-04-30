@@ -1,0 +1,10 @@
+{
+  "name": "wechat-content-studio",
+  "version": "1.0.0",
+  "description": "微信公众号全流程创作工具——从选题到发布一条龙服务。包含选题头脑风暴、爆款标题生成、AI写作去痕润色、配图设计、一键发布到微信公众号。",
+  "author": "炙青",
+  "license": "MIT",
+  "compatibility": {
+    "requiredTools": ["bun (>=1.0)"]
+  }
+}
