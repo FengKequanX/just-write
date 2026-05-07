@@ -51,7 +51,7 @@ test -f "$HOME/.baoyu-skills/post-to-xhs/EXTEND.md" && echo "user"
 **EXTEND.md example**:
 
 ```md
-default_author: 炙青
+default_author: 作者名
 default_theme: default
 default_aspect: 3:4
 default_topic_tags: AI观察,科技,编程
@@ -93,7 +93,7 @@ Resolve defaults:
 ### Step 1: Render Markdown to Carousel Images
 
 ```bash
-${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--theme default] [--aspect 3:4] [--author 炙青]
+${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--theme default] [--aspect 3:4] [--author 作者名]
 ```
 
 **Parameters**:

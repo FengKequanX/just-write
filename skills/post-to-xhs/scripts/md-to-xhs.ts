@@ -195,7 +195,7 @@ function buildPageSections(
     bodyHtml: '',
     slug: 'ending',
     tags,
-    author: author || fm.author || '炙青',
+    author: author || fm.author || '作者名',
   });
 
   return pages;
@@ -229,7 +229,7 @@ function buildCoverHtml(
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="cover">
-  <div class="brand">炙青</div>
+  <div class="brand">作者名</div>
   <div class="title">${escapeHtml(title)}</div>
   <div class="divider"></div>
   ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
@@ -369,7 +369,7 @@ function generateCaption(
     '',
     tags.join(' '),
     '',
-    `— ${author || '炙青'}`,
+    `— ${author || '作者名'}`,
   ].join('\n');
 }
 
@@ -395,7 +395,7 @@ async function render(
   const baseDir = path.dirname(absMarkdown);
   const content = fs.readFileSync(absMarkdown, 'utf-8');
   const { fm, body } = parseFrontmatter(content);
-  const resolvedAuthor = author || fm.author || '炙青';
+  const resolvedAuthor = author || fm.author || '作者名';
 
   const tokens = marked.lexer(body);
   const sections = splitByHeadings(tokens);
@@ -515,7 +515,7 @@ Output:
   <out>/caption.md
 
 Example:
-  bun md-to-xhs.ts article.md --out ./xhs-images --author 炙青
+  bun md-to-xhs.ts article.md --out ./xhs-images --author 作者名
 `);
   process.exit(0);
 }
