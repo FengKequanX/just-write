@@ -1,15 +1,15 @@
 ---
 name: just-write
-description: |
-  那就开写吧——把你的想法变成可发布的文章。AI辅助但不代替，你的思路，你的表达。
-  支持微信公众号全流程：头脑风暴、标题、创作、润色、配图、一键发布。未来扩展到小红书等平台。
-  Trigger immediately when user wants to write, create, or publish content, especially:
+description: Trigger immediately when user wants to write, create, or publish content, especially:
   - "写一篇关于XX的文章"、"帮我写XX"
   - "把这个想法写成文章"、"润色一下"
   - 任何表达写作意图或内容创作需求
 ---
 
 # 微信公众号内容创作工作室
+
+> 那就开写吧——把你的想法变成可发布的文章。AI辅助但不代替，你的思路，你的表达。
+> 支持微信公众号全流程创作（头脑风暴、标题、创作、润色、配图、一键发布），发布后可同步发小红书。
 
 ## ⚠️ 最重要的规则：强制暂停机制
 
