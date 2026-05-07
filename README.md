@@ -68,7 +68,7 @@ only_fans_can_comment: 0
 
 ### 2. （可选）偏好设置
 
-创建 `.baoyu-skills/baoyu-post-to-xhs/EXTEND.md`：
+创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
 
 ```yaml
 enabled: true
@@ -124,7 +124,7 @@ dry_run: false
 | humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) |
 | image-prompt-engineer | 内置 |
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) |
-| baoyu-post-to-xhs | 内置 |
+| post-to-xhs | 内置 |
 
 ## 更新
 

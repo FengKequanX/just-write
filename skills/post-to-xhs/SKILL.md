@@ -1,5 +1,5 @@
 ---
-name: baoyu-post-to-xhs
+name: post-to-xhs
 description: >
   将 Markdown 文章渲染为小红书轮播图并自动发布。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
@@ -7,7 +7,7 @@ description: >
 version: 0.1.0
 metadata:
   openclaw:
-    homepage: https://github.com/FengKequanX/just-write#baoyu-post-to-xhs
+    homepage: https://github.com/FengKequanX/just-write#post-to-xhs
     requires:
       anyBins:
         - bun
@@ -37,16 +37,16 @@ Check EXTEND.md existence (priority order):
 
 ```bash
 # macOS, Linux, WSL, Git Bash
-test -f .baoyu-skills/baoyu-post-to-xhs/EXTEND.md && echo "project"
-test -f "${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/baoyu-post-to-xhs/EXTEND.md" && echo "xdg"
-test -f "$HOME/.baoyu-skills/baoyu-post-to-xhs/EXTEND.md" && echo "user"
+test -f .baoyu-skills/post-to-xhs/EXTEND.md && echo "project"
+test -f "${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/post-to-xhs/EXTEND.md" && echo "xdg"
+test -f "$HOME/.baoyu-skills/post-to-xhs/EXTEND.md" && echo "user"
 ```
 
 | Path | Location |
 |------|----------|
-| `.baoyu-skills/baoyu-post-to-xhs/EXTEND.md` | Project directory |
-| `${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/baoyu-post-to-xhs/EXTEND.md` | XDG |
-| `$HOME/.baoyu-skills/baoyu-post-to-xhs/EXTEND.md` | User home |
+| `.baoyu-skills/post-to-xhs/EXTEND.md` | Project directory |
+| `${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/post-to-xhs/EXTEND.md` | XDG |
+| `$HOME/.baoyu-skills/post-to-xhs/EXTEND.md` | User home |
 
 **EXTEND.md example**:
 
