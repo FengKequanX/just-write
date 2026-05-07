@@ -226,11 +226,11 @@ Then publish:
 
 ```bash
 bun <plugin-dir>/skills/baoyu-post-to-wechat/scripts/wechat-api.ts \
-  "articles/文章标题.md" \
+  "[文章标题]/[文章标题].md" \
   --theme default \
   --color blue \
   --author "作者名" \
-  --cover "imgs/封面图.png"
+  --cover "[文章标题]/imgs/封面图.png"
 ```
 
 **Parameters**:
@@ -258,7 +258,7 @@ fi
 然后执行：
 
 ```bash
-bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "articles/文章标题.md"
+bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题].md"
 bun <plugin-dir>/skills/post-to-xhs/scripts/xhs-publisher.ts
 ```
 
