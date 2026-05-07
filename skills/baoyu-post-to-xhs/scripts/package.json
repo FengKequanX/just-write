@@ -1,0 +1,13 @@
+{
+  "name": "baoyu-post-to-xhs",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "render": "bun md-to-xhs.ts",
+    "publish": "bun xhs-publisher.ts"
+  },
+  "dependencies": {
+    "marked": "^15.0.0",
+    "playwright": "^1.52.0"
+  }
+}

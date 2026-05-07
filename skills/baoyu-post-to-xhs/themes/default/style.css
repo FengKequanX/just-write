@@ -1,0 +1,236 @@
+/* Theme: 炙青 · Default */
+/* Clean tech observation style — 白底深字，蓝色强调 */
+
+:root {
+  --bg: #FFFFFF;
+  --bg-warm: #F8F6F1;
+  --text: #1A1A1A;
+  --text-sec: #666666;
+  --accent: #2563EB;
+  --accent-bg: #EFF6FF;
+  --border: #E5E7EB;
+  --font-main: -apple-system, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==================== Cover Page ==================== */
+
+.cover {
+  padding: 120px 72px 100px;
+  justify-content: center;
+}
+
+.cover .brand {
+  position: absolute;
+  top: 72px;
+  left: 72px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.cover .brand::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.cover .title {
+  font-size: 60px;
+  font-weight: 800;
+  line-height: 1.25;
+  margin-bottom: 28px;
+  max-width: 900px;
+}
+
+.cover .subtitle {
+  font-size: 32px;
+  color: var(--text-sec);
+  line-height: 1.5;
+  max-width: 800px;
+}
+
+.cover .divider {
+  width: 60px;
+  height: 4px;
+  background: var(--accent);
+  margin: 40px 0;
+  border-radius: 2px;
+}
+
+.cover .author {
+  font-size: 28px;
+  color: var(--text-sec);
+}
+
+/* ==================== Content Page ==================== */
+
+.content {
+  padding: 72px 72px 100px;
+}
+
+.content .section-title {
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--text);
+  border-left: 6px solid var(--accent);
+  padding-left: 24px;
+  margin-bottom: 40px;
+  line-height: 1.3;
+}
+
+.content .body {
+  font-size: 30px;
+  line-height: 1.85;
+  color: var(--text);
+  flex: 1;
+}
+
+.content .body p {
+  margin-bottom: 24px;
+}
+
+.content .body strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.content .body em {
+  font-style: italic;
+  color: var(--text-sec);
+}
+
+.content .body img {
+  width: 100%;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.content .body blockquote {
+  border-left: 4px solid var(--accent);
+  padding: 16px 20px;
+  background: var(--accent-bg);
+  color: var(--text);
+  font-style: normal;
+  margin: 24px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.content .body ul,
+.content .body ol {
+  margin: 16px 0;
+  padding-left: 32px;
+}
+
+.content .body li {
+  margin-bottom: 12px;
+  line-height: 1.75;
+}
+
+.content .body ul li::marker {
+  color: var(--accent);
+}
+
+.content .body code {
+  background: #F3F4F6;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 26px;
+}
+
+.content .body pre {
+  background: #1F2937;
+  color: #E5E7EB;
+  padding: 24px;
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.6;
+  overflow: hidden;
+  margin: 24px 0;
+}
+
+.content .body pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* ==================== Ending Page ==================== */
+
+.ending {
+  padding: 120px 72px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: var(--bg-warm);
+}
+
+.ending .cta {
+  font-size: 44px;
+  font-weight: 800;
+  margin-bottom: 48px;
+  color: var(--text);
+}
+
+.ending .tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+
+.ending .tag {
+  font-size: 28px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 12px 28px;
+  border-radius: 28px;
+  font-weight: 500;
+}
+
+.ending .end-author {
+  font-size: 28px;
+  color: var(--text-sec);
+}
+
+.ending .end-author strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* ==================== Shared ==================== */
+
+.page-num {
+  position: absolute;
+  bottom: 48px;
+  right: 72px;
+  font-size: 22px;
+  color: #C0C0C0;
+  font-variant-numeric: tabular-nums;
+}
