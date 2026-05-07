@@ -91,6 +91,27 @@ dry_run: false
 
 生成的图片保存在输出目录，也可通过 `dry_run: true` 仅预览不发布。
 
+## 文章目录结构
+
+每篇文章独立文件夹管理：
+
+```
+[文章标题]/
+├── [文章标题].md        # 文章 Markdown 文件
+└── imgs/               # 该文章的所有图片和封面
+```
+
+例如：
+
+```
+AI Agent的未来趋势/
+├── AI Agent的未来趋势.md
+└── imgs/
+    ├── cover.png
+    ├── figure-1.png
+    └── figure-2.png
+```
+
 ## 使用
 
 直接告诉 Claude：
