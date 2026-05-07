@@ -209,14 +209,13 @@ Use the image-prompt-engineer skill for cover art and illustrations.
 
 ## Step 5: 一键发布
 
-Use the baoyu-post-to-wechat skill for publishing.
+### 5.1 发布到微信公众号
 
-### 发布命令
+Use the baoyu-post-to-wechat skill for publishing.
 
 Before publishing, ensure the baoyu-post-to-wechat script dependencies are installed:
 
 ```bash
-# First time only: install script dependencies
 SCRIPT_DIR=<plugin-dir>/skills/baoyu-post-to-wechat/scripts
 if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
   bun install --cwd "$SCRIPT_DIR"
@@ -241,6 +240,30 @@ bun <plugin-dir>/skills/baoyu-post-to-wechat/scripts/wechat-api.ts \
 - `--cover`: path to cover image
 - `--no-cite`: keep external links inline (default: convert to bottom citations)
 
+### 5.2 同步发布到小红书
+
+微信公众号发布完成后，检查 `.baoyu-skills/post-to-xhs/EXTEND.md` 中的 `enabled` 配置：
+- 如果 `enabled: true` 或未配置（默认 true），询问用户是否同步发小红书
+- 用户确认后，调用 `post-to-xhs` skill 发布同一篇文章
+
+Before publishing, ensure the post-to-xhs script dependencies are installed:
+
+```bash
+SCRIPT_DIR=<plugin-dir>/skills/post-to-xhs/scripts
+if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+  bun install --cwd "$SCRIPT_DIR"
+fi
+```
+
+然后执行：
+
+```bash
+bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "articles/文章标题.md"
+bun <plugin-dir>/skills/post-to-xhs/scripts/xhs-publisher.ts
+```
+
+小红书发布为图片卡片形式，脚本会自动将文章内容渲染为封面页、内容页和结尾页。
+
 ### 配置要求
 
 Before publishing, ensure:
@@ -253,20 +276,25 @@ Before publishing, ensure:
    default_author: 作者名
    ```
 
-2. **API credentials** at `.baoyu-skills/.env`:
+2. **post-to-xhs EXTEND.md** at `.baoyu-skills/post-to-xhs/EXTEND.md`（可选）:
+   ```yaml
+   enabled: true
+   default_aspect_ratio: "3:4"
+   dry_run: false
+   ```
+
+3. **API credentials** at `.baoyu-skills/.env`:
    ```
    WECHAT_APP_ID=your_app_id
    WECHAT_APP_SECRET=your_app_secret
    ```
 
-3. **Bun** runtime installed (`bun --version`)
+4. **Bun** runtime installed (`bun --version`)
 
 ### 发布后
 
-告知用户草稿箱链接：https://mp.weixin.qq.com → 内容管理 → 草稿箱
-
----
-
+- 微信公众号：告知用户草稿箱链接 https://mp.weixin.qq.com → 内容管理 → 草稿箱
+- 小红书：确认发布结果并告知用户
 ## 常见问题
 
 | 问题 | 处理 |
