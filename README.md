@@ -143,7 +143,6 @@ AI Agent的未来趋势/
 | brainstorming | [obra/superpowers](https://github.com/obra/superpowers) |
 | viral-title | 内置 |
 | humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) |
-| image-prompt-engineer | 内置 |
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) |
 | post-to-xhs | 内置 |
 

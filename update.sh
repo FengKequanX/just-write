@@ -44,7 +44,4 @@ git -C "$TMPDIR" sparse-checkout set skills/brainstorming
 cp "$TMPDIR/skills/brainstorming/SKILL.md" skills/brainstorming/
 rm -rf "$TMPDIR"
 
-# image-prompt-engineer - bundled, no upstream
-echo "[image-prompt-engineer] (bundled, no upstream)"
-
 echo "=== Update complete ==="

@@ -184,13 +184,15 @@ Use the humanizer-zh skill to polish the article:
 
 ### 4.2 AI 配图
 
-Use the image-prompt-engineer skill for cover art and illustrations.
+根据文章主题和内容，直接生成英文 AI 绘图提示词。要求：
+- 风格与文章调性一致（科技/人文/商务等）
+- 主体突出、构图简洁
+- 输出格式：`Prompt: [英文提示词] | Negative: [需要避免的元素]`
 
 ### 4.3 封面图
 
 - 用户有素材 → 直接使用
-- 无素材 → 用 image-prompt-engineer 生成提示词
-- 默认 2:3 竖版
+- 无素材 → 根据文章标题和主题直接生成封面图提示词（默认 2:3 竖版）
 
 ### ✅ 最终确认（合并）
 
