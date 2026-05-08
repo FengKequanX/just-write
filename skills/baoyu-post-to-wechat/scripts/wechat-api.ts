@@ -70,6 +70,14 @@ async function fetchAccessToken(appId: string, appSecret: string): Promise<strin
   }
   const data = await res.json() as AccessTokenResponse;
   if (data.errcode) {
+    if (data.errcode === 40164) {
+      const ipMatch = data.errmsg?.match(/invalid ip\s+([\d.:]+)/i);
+      const ip = ipMatch ? ipMatch[1] : "unknown";
+      throw new Error(
+        `IP白名单错误: 当前IP (${ip}) 不在白名单中。\n` +
+        `请在 mp.weixin.qq.com → 设置与开发 → 基本配置 → IP白名单 中添加该IP。`
+      );
+    }
     throw new Error(`Access token error ${data.errcode}: ${data.errmsg}`);
   }
   if (!data.access_token) {
@@ -450,8 +458,21 @@ function renderMarkdownWithPlaceholders(
     cwd: baseDir,
   });
 
+  if (result.error) {
+    throw new Error(
+      `Markdown render failed: 无法运行 npx。请确保已安装 Node.js。\n` +
+      `Details: ${result.error.message}`
+    );
+  }
+
   if (result.status !== 0) {
     const stderr = result.stderr?.toString() || "";
+    if (stderr.includes("ENOENT") || stderr.includes("not found") || stderr.includes("command not found")) {
+      throw new Error(
+        `Markdown render failed: bun 不可用。请安装 bun: npm install -g bun\n` +
+        `Details: ${stderr}`
+      );
+    }
     throw new Error(`Markdown placeholder render failed: ${stderr}`);
   }
 
