@@ -1,9 +1,10 @@
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 import { marked } from 'marked';
-import { chromium, type Page } from 'playwright';
 
 // --- Types ---
 
@@ -47,6 +48,137 @@ const CONTENT_TOP_PAD = 72;
 const CONTENT_BOTTOM_PAD = 100;
 const PAGE_NUM_HEIGHT = 48;
 const SECTION_TITLE_HEIGHT = 120;
+const CHARS_PER_LINE = 30;
+const LINE_HEIGHT_PX = 56; // 30px font * 1.85 line-height ≈ 56px per line
+const IMG_EST_HEIGHT = 400;
+const BLOCK_PADDING = 24;
+
+// --- Chrome Discovery ---
+
+function findChrome(): string {
+  const envPaths = [
+    process.env.CHROME_PATH,
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  ].filter(Boolean);
+
+  for (const p of envPaths) {
+    if (p && fs.existsSync(p)) return p;
+  }
+
+  const platform = process.platform;
+  const candidates: string[] = [];
+
+  if (platform === 'win32') {
+    const local = process.env.LOCALAPPDATA;
+    const pf = process.env.ProgramFiles;
+    const pf86 = process.env['ProgramFiles(x86)'];
+    if (pf) candidates.push(path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    if (pf86) candidates.push(path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    if (local) candidates.push(path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    // Edge (Chromium-based)
+    if (pf) candidates.push(path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+    if (pf86) candidates.push(path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+
+    // Playwright's bundled Chromium — search recursively for chrome.exe
+    const localAppData = local || '';
+    const pwDir = path.join(localAppData, 'ms-playwright');
+    if (fs.existsSync(pwDir)) {
+      for (const entry of fs.readdirSync(pwDir)) {
+        if (entry.startsWith('chromium') && !entry.includes('headless')) {
+          const subDir = path.join(pwDir, entry);
+          try {
+            for (const sub of fs.readdirSync(subDir)) {
+              const candidate = path.join(subDir, sub, 'chrome.exe');
+              if (fs.existsSync(candidate)) candidates.push(candidate);
+            }
+          } catch { /* not a dir */ }
+        }
+      }
+    }
+  } else if (platform === 'darwin') {
+    candidates.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+    candidates.push('/Applications/Chromium.app/Contents/MacOS/Chromium');
+    // Playwright bundled
+    const pwDir = path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright');
+    if (fs.existsSync(pwDir)) {
+      for (const entry of fs.readdirSync(pwDir)) {
+        if (entry.startsWith('chromium')) {
+          candidates.push(path.join(pwDir, entry, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'));
+        }
+      }
+    }
+  } else {
+    candidates.push('/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium');
+    const pwDir = path.join(os.homedir(), '.cache', 'ms-playwright');
+    if (fs.existsSync(pwDir)) {
+      for (const entry of fs.readdirSync(pwDir)) {
+        if (entry.startsWith('chromium')) {
+          candidates.push(path.join(pwDir, entry, 'chrome-linux', 'chrome'));
+        }
+      }
+    }
+  }
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+
+  throw new Error(
+    'Chrome not found. Set CHROME_PATH env var or install Google Chrome.\n' +
+    'Download: https://www.google.com/chrome/',
+  );
+}
+
+// --- Chrome Rendering ---
+
+function renderWithChrome(
+  htmlPath: string,
+  outputPath: string,
+  width: number,
+  height: number,
+): Promise<void> {
+  const chrome = findChrome();
+  const fileUrl = pathToFileURL(htmlPath).href;
+
+  return new Promise<void>((resolve, reject) => {
+    const args = [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      '--disable-extensions',
+      '--disable-software-rasterizer',
+      `--window-size=${width},${height}`,
+      '--default-background-color=00000000',
+      '--hide-scrollbars',
+      `--screenshot=${outputPath}`,
+      fileUrl,
+    ];
+
+    const proc = spawn(chrome, args, { stdio: 'pipe' });
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      reject(new Error(`Chrome screenshot timed out for ${path.basename(htmlPath)}`));
+    }, 30_000);
+
+    let stderr = '';
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0 && fs.existsSync(outputPath)) {
+        resolve();
+      } else {
+        reject(new Error(`Chrome exited with code ${code}: ${stderr.slice(0, 200)}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
 
 // --- Utilities ---
 
@@ -56,10 +188,10 @@ function parseFrontmatter(text: string): { fm: Frontmatter; body: string } {
 
   const fm: Frontmatter = {};
   for (const line of match[1]!.split('\n')) {
-    const ci = line.indexOf(':');
+    const ci = line.indexOf(': ');
     if (ci > 0) {
       const key = line.slice(0, ci).trim();
-      const val = line.slice(ci + 1).trim().replace(/^['"]|['"]$/g, '');
+      const val = line.slice(ci + 2).trim().replace(/^['"]|['"]$/g, '');
       if (val) fm[key] = val;
     }
   }
@@ -83,17 +215,12 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function toFileUrl(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
-}
-
 function resolveImagePaths(html: string, baseDir: string): string {
   return html.replace(
     /(<img\s[^>]*src=["'])(?!https?:|data:|file:)([^"']+)/g,
     (_, prefix, src) => {
       const absolute = path.resolve(baseDir, src);
-      return `${prefix}${toFileUrl(absolute)}`;
+      return `${prefix}${pathToFileURL(absolute).href}`;
     },
   );
 }
@@ -229,10 +356,15 @@ function buildCoverHtml(
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="cover">
-  <div class="brand">作者名</div>
-  <div class="title">${escapeHtml(title)}</div>
-  <div class="divider"></div>
-  ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  <div class="cover-accent-glow"></div>
+  <div class="cover-bg-shape"></div>
+  <div class="title-area">
+    <div class="brand">${escapeHtml(author)}</div>
+    <div class="title">${escapeHtml(title)}</div>
+    <div class="divider"></div>
+    ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  </div>
+  <div class="cover-bottom-bar"></div>
   <div class="author">${escapeHtml(author)}</div>
   <div class="page-num">${pageNum}</div>
 </body></html>`;
@@ -274,67 +406,97 @@ function buildEndingHtml(
 </body></html>`;
 }
 
-// --- Playwright Rendering ---
+// --- Heuristic Content Splitting ---
 
-async function checkOverflow(page: Page): Promise<boolean> {
-  return page.evaluate(() => {
-    const body = document.body;
-    return body.scrollHeight > body.clientHeight + 2;
-  });
+function estimateHtmlHeight(html: string): number {
+  // Count images
+  const imgCount = (html.match(/<img\s/g) || []).length;
+
+  // Count block-level elements for their padding
+  const blockCount =
+    (html.match(/<\/p>/g) || []).length +
+    (html.match(/<\/h[1-6]>/g) || []).length +
+    (html.match(/<\/blockquote>/g) || []).length +
+    (html.match(/<\/ul>/g) || []).length +
+    (html.match(/<\/ol>/g) || []).length +
+    (html.match(/<\/pre>/g) || []).length;
+
+  // Count code blocks (they're taller per line)
+  const preCount = (html.match(/<\/pre>/g) || []).length;
+
+  // Strip HTML tags to get text length
+  const text = html.replace(/<[^>]+>/g, '').replace(/&[^;]+;/g, 'x');
+  const charCount = text.length;
+
+  // Estimate lines from characters
+  const textLines = Math.ceil(charCount / CHARS_PER_LINE);
+  const textHeight = textLines * LINE_HEIGHT_PX;
+
+  // Add image heights
+  const imgHeight = imgCount * IMG_EST_HEIGHT;
+
+  // Add block padding (between consecutive blocks)
+  const blockPadding = blockCount > 1 ? (blockCount - 1) * BLOCK_PADDING : 0;
+
+  // Code blocks use smaller font but more compact — already counted in charCount
+  // Add a small bonus for pre blocks (background, padding)
+  const preExtra = preCount * 48;
+
+  return textHeight + imgHeight + blockPadding + preExtra;
 }
 
-async function splitContentByHeight(
-  page: Page,
-  availableHeight: number,
-): Promise<string[][]> {
-  return page.evaluate((maxH: number) => {
-    const bodyEl = document.querySelector('.body');
-    if (!bodyEl) return [[]];
-
-    const children = Array.from(bodyEl.children);
-    if (children.length === 0) return [[]];
-
-    const pages: string[][] = [];
-    let currentPage: string[] = [];
-    let currentHeight = 0;
-
-    for (const child of children) {
-      const rect = child.getBoundingClientRect();
-      const style = window.getComputedStyle(child);
-      const marginTop = parseFloat(style.marginTop) || 0;
-      const marginBottom = parseFloat(style.marginBottom) || 0;
-      const totalHeight = rect.height + marginTop + marginBottom;
-
-      if (currentHeight + totalHeight > maxH && currentPage.length > 0) {
-        pages.push(currentPage);
-        currentPage = [];
-        currentHeight = 0;
-      }
-
-      currentPage.push(child.outerHTML);
-      currentHeight += totalHeight;
-    }
-
-    if (currentPage.length > 0) pages.push(currentPage);
-    return pages;
-  }, availableHeight);
-}
-
-async function renderPage(
-  page: Page,
-  html: string,
-  outputPath: string,
-): Promise<void> {
-  const tempFile = path.join(os.tmpdir(), `xhs-render-${Date.now()}.html`);
-  fs.writeFileSync(tempFile, html);
-  await page.goto(toFileUrl(tempFile), { waitUntil: 'networkidle' });
-  await page.screenshot({ path: outputPath, type: 'png' });
-
-  try {
-    fs.unlinkSync(tempFile);
-  } catch {
-    // ignore cleanup errors
+function splitHtmlAtBlockBoundaries(html: string): string[] {
+  const pattern = /(<\/(?:p|h[1-6]|blockquote|ul|ol|pre|div|table)>)\s*/gi;
+  const parts: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    parts.push(html.slice(lastIndex, match.index + match[0].length));
+    lastIndex = match.index + match[0].length;
   }
+  if (lastIndex < html.length) {
+    parts.push(html.slice(lastIndex));
+  }
+
+  return parts.filter((p) => p.trim().length > 0);
+}
+
+function estimateContentPages(
+  bodyHtml: string,
+  availableHeight: number,
+): string[] {
+  const totalHeight = estimateHtmlHeight(bodyHtml);
+
+  if (totalHeight <= availableHeight) {
+    return [bodyHtml];
+  }
+
+  const blocks = splitHtmlAtBlockBoundaries(bodyHtml);
+  if (blocks.length === 0) return [bodyHtml];
+
+  const pages: string[] = [];
+  let currentPage = '';
+  let currentHeight = 0;
+  const safeHeight = availableHeight * 0.85;
+
+  for (const block of blocks) {
+    const blockHeight = estimateHtmlHeight(block);
+
+    if (currentHeight + blockHeight > safeHeight && currentPage.trim()) {
+      pages.push(currentPage);
+      currentPage = block;
+      currentHeight = blockHeight;
+    } else {
+      currentPage += block;
+      currentHeight += blockHeight;
+    }
+  }
+
+  if (currentPage.trim()) {
+    pages.push(currentPage);
+  }
+
+  return pages.length > 0 ? pages : [bodyHtml];
 }
 
 // --- Caption Generation ---
@@ -404,84 +566,70 @@ async function render(
 
   fs.mkdirSync(outDir, { recursive: true });
 
-  const browser = await chromium.launch();
-  const page = await browser.newPage({
-    viewport: { width: size.width, height: size.height },
-  });
-
   const images: string[] = [];
   let pageNum = 1;
+  const tempFiles: string[] = [];
 
   try {
     for (const section of pages) {
-      let html: string;
-
       if (section.type === 'cover') {
-        html = buildCoverHtml(section.title, section.bodyHtml, resolvedAuthor, css, pageNum);
-        html = resolveImagePaths(html, baseDir);
-
+        const html = resolveImagePaths(
+          buildCoverHtml(section.title, section.bodyHtml, resolvedAuthor, css, pageNum),
+          baseDir,
+        );
         const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
-        await renderPage(page, html, imgPath);
+        const tmpHtml = path.join(os.tmpdir(), `xhs-cover-${Date.now()}.html`);
+        fs.writeFileSync(tmpHtml, html);
+        tempFiles.push(tmpHtml);
+        await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
         images.push(imgPath);
         pageNum++;
       } else if (section.type === 'ending') {
-        html = buildEndingHtml(section.tags || [], section.author || resolvedAuthor, css, pageNum);
-
+        const html = buildEndingHtml(section.tags || [], section.author || resolvedAuthor, css, pageNum);
         const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-ending.png`);
-        await renderPage(page, html, imgPath);
+        const tmpHtml = path.join(os.tmpdir(), `xhs-ending-${Date.now()}.html`);
+        fs.writeFileSync(tmpHtml, html);
+        tempFiles.push(tmpHtml);
+        await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
         images.push(imgPath);
         pageNum++;
       } else {
-        html = buildContentHtml(section.title, section.bodyHtml, css, pageNum);
-        html = resolveImagePaths(html, baseDir);
+        const rawHtml = resolveImagePaths(
+          buildContentHtml(section.title, section.bodyHtml, css, pageNum),
+          baseDir,
+        );
 
-        const tempFile = path.join(os.tmpdir(), `xhs-measure-${Date.now()}.html`);
-        fs.writeFileSync(tempFile, html);
-        await page.goto(toFileUrl(tempFile), { waitUntil: 'networkidle' });
+        // Extract body content for splitting
+        const bodyMatch = rawHtml.match(/<div class="body">([\s\S]*?)<\/div>\s*<div class="page-num">/);
+        const fullBody = bodyMatch ? bodyMatch[1]! : section.bodyHtml;
+        const titleHeight = section.title ? SECTION_TITLE_HEIGHT : 0;
+        const availableHeight =
+          size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT - titleHeight;
 
-        const hasOverflow = await checkOverflow(page);
+        const chunks = estimateContentPages(fullBody, availableHeight);
 
-        if (!hasOverflow) {
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkHtml = resolveImagePaths(
+            buildContentHtml(i === 0 ? section.title : '', chunks[i]!, css, pageNum),
+            baseDir,
+          );
           const imgPath = path.join(
             outDir,
             `${String(pageNum).padStart(2, '0')}-content-${section.slug}.png`,
           );
-          await page.screenshot({ path: imgPath, type: 'png' });
+          const tmpHtml = path.join(os.tmpdir(), `xhs-content-${Date.now()}-${i}.html`);
+          fs.writeFileSync(tmpHtml, chunkHtml);
+          tempFiles.push(tmpHtml);
+          await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
           images.push(imgPath);
           pageNum++;
-        } else {
-          const titleHeight = section.title ? SECTION_TITLE_HEIGHT : 0;
-          const availableHeight =
-            size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT - titleHeight;
-          const chunks = await splitContentByHeight(page, availableHeight);
-
-          for (let i = 0; i < chunks.length; i++) {
-            const chunkHtml = buildContentHtml(
-              i === 0 ? section.title : '',
-              chunks[i]!.join('\n'),
-              css,
-              pageNum,
-            );
-            const resolved = resolveImagePaths(chunkHtml, baseDir);
-            const imgPath = path.join(
-              outDir,
-              `${String(pageNum).padStart(2, '0')}-content-${section.slug}.png`,
-            );
-            await renderPage(page, resolved, imgPath);
-            images.push(imgPath);
-            pageNum++;
-          }
-        }
-
-        try {
-          fs.unlinkSync(tempFile);
-        } catch {
-          // ignore
         }
       }
     }
   } finally {
-    await browser.close();
+    for (const f of tempFiles) {
+      try { fs.unlinkSync(f); } catch { /* ignore */ }
+    }
   }
 
   const title = pages.find((p) => p.type === 'cover')?.title || fm.title || '未命名';
@@ -507,6 +655,9 @@ Options:
   --author <name>   Author name
   --tags <tags>     Comma-separated topic tags
   --help            Show this help
+
+Environment:
+  CHROME_PATH       Custom Chrome executable path
 
 Output:
   <out>/01-cover.png

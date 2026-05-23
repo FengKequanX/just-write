@@ -4,7 +4,7 @@ description: >
   将 Markdown 文章渲染为小红书轮播图并自动发布。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
   "post to xhs"、"publish to xiaohongshu"时使用。
-version: 0.1.0
+version: 0.2.0
 metadata:
   openclaw:
     homepage: https://github.com/FengKequanX/just-write#post-to-xhs
@@ -28,8 +28,22 @@ metadata:
 
 | Script | Purpose |
 |--------|----------|
-| `scripts/md-to-xhs.ts` | Markdown → 小红书轮播图 PNG |
-| `scripts/xhs-publisher.ts` | 浏览器自动化发布到小红书 |
+| `scripts/md-to-xhs.ts` | Markdown → 小红书轮播图 PNG (Chrome headless) |
+| `scripts/xhs-publisher.ts` | 浏览器自动化发布到小红书 (Playwright) |
+
+## Rendering Backend
+
+**Carousel images** use Chrome native `--headless --screenshot` for reliable cross-platform rendering. No Playwright needed for rendering.
+
+**Publisher** uses Playwright for browser automation (form filling, file upload).
+
+**Chrome discovery** (resolution order):
+1. `CHROME_PATH` env var
+2. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` env var
+3. Platform defaults: Windows (`%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe`), macOS (`/Applications/Google Chrome.app`), Linux (`/usr/bin/google-chrome`)
+4. Playwright bundled Chromium (auto-detected from `ms-playwright` directory)
+
+If Chrome is not found, the script errors with install instructions. Set `CHROME_PATH` to override.
 
 ## Preferences (EXTEND.md)
 
@@ -59,7 +73,7 @@ default_caption_style: 干货型
 browser_profile_path: ~/.baoyu-skills/xhs-chrome-profile
 ```
 
-**Theme options**: `default` (clean tech style)
+**Theme options**: `default` (dark gradient cover, editorial content)
 
 **Aspect ratio options**: `3:4` (1080×1440, default) / `9:16` / `1:1` / `4:3`
 
@@ -103,14 +117,15 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 | `<markdown-file>` | Input markdown file (positional, required) |
 | `--out <dir>` | Output directory (default: `<article-dir>/<filename>-xhs/`) |
 | `--theme <name>` | Theme name (default: `default`) |
-| `--aspect <ratio>` | Aspect ratio: `3:4` / `9:16` / `1:1` / `4:3` (default: `3:4`) |
+| `--aspect <ratio>` | Aspect ratio: `3:4` / `9:16` / `1:1` / `4:3` (default `3:4`) |
 | `--author <name>` | Author name for cover/ending |
+| `--tags <tags>` | Comma-separated topic tags for ending page |
 
 **Rendering rules**:
 - First H1 section → Cover page (title + subtitle + author + brand mark)
 - H2 sections → Content pages (section title + body text + inline images)
 - Auto-generated → Ending page (CTA + hashtags + author)
-- Content overflow → Auto-split into multiple pages by paragraph
+- Content overflow → Auto-split into multiple pages by paragraph (heuristic)
 - Inline images (`![](path)`) → Embedded and rendered
 
 **Output structure**:
@@ -210,19 +225,20 @@ Set `xhs: false` to skip Xiaohongshu publishing.
 
 | Issue | Solution |
 |-------|----------|
-| Playwright not installed | `npx playwright install chromium` |
-| Browser launch fails | Set `CHROME_PATH` env var or check Chromium install |
+| Chrome not found | Install Google Chrome or set `CHROME_PATH` env var |
+| Rendering fails | Check Chrome version ≥ 112 (required for `--headless=new`) |
+| Content overflow | Auto-split by heuristic; check output images and adjust content length |
 | QR code timeout | Re-run, scan within 120 seconds |
 | Image upload fails | Check format (PNG/JPG only), max 20 images per note |
 | Session expired | Delete profile dir, re-login with QR code |
-| Content overflow | Auto-split handles overflow; check output images |
 | Title too long | Auto-truncated to 20 chars |
+| Publisher browser fails | `npx playwright install chromium` (publisher uses Playwright) |
 
 ## Prerequisites
 
 - `bun` runtime (or `npx`)
-- Playwright with Chromium (`npx playwright install chromium`)
-- Google Chrome or Chromium browser
+- Google Chrome or Chromium (≥ 112 for headless screenshots)
+- Playwright with Chromium (for publisher only: `npx playwright install chromium`)
 - Xiaohongshu account (for publishing)
 
 ## Extension Support
