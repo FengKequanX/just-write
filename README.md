@@ -145,7 +145,6 @@ dry_run: false
 | baoyu-format-markdown | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 排版优化 + 标题生成 + CJK 排版 |
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
 | post-to-xhs | 内置 | 小红书发布 |
-| viral-title | 内置 | 标题生成（已被 baoyu-format-markdown 替代，保留备用） |
 
 ## 更新
 

@@ -42,8 +42,6 @@ cp -r "$TMPDIR/skills/baoyu-format-markdown/scripts/" skills/baoyu-format-markdo
 cp -r "$TMPDIR/skills/baoyu-format-markdown/references/" skills/baoyu-format-markdown/references/
 rm -rf "$TMPDIR"
 
-# viral-title - no upstream, bundled as-is
-echo "[viral-title] (bundled, no upstream)"
 
 # brainstorming (obra/superpowers)
 echo "[brainstorming]"
