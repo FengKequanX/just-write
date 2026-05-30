@@ -8,54 +8,65 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 # 微信公众号内容创作工作室
 
-把你的想法变成可发布的文章。支持全流程：头脑风暴 → 标题 → 创作 → 润色 → 配图 → 发布（可同步小红书）。
+把你的想法变成可发布的文章。支持全流程：选题讨论 → 标题 → 创作 → 润色 → 配图与发布 → 发布。
 
 ---
 
-<RULES>
+## MANDATORY RULES
+
 这些规则覆盖本文件中的所有其他指令。违反任何一条 = 工作流失败。
 
-1. **NEVER 跳步。** 检查点要求"确认内容"，你必须停下来等用户说这几个字，不能自己判断"差不多就过了"。
-2. **NEVER 不输出检查点就进入下一步。** 每个步骤结束后，必须先输出该步骤的检查点块，再等待用户确认。
-3. **NEVER 写没有图片占位符的文章。** 每个事实性论断（数据、引用、新闻事件）必须带 `![描述](imgs/xxx.png)`。纯个人观点不需要。
-4. **NEVER 在用户确认内容之前运行 humanizer-zh。** 润色必须在"确认内容"之后。
-5. **NEVER 跳过截图来源清单。** 用户说"确认内容"后，立即输出来源表，不能等用户问。
-6. **NEVER 重启已完成步骤。** 如果用户在前一轮对话中已经完成了某步，从下一个未完成的步骤继续。
-</RULES>
+1. **MANDATORY 每次回复开头标注当前步骤。** 格式：`[Step N: 步骤名]`。这让跳步对用户可见。每个 Step 的 label：
+   - `[Step 1: 选题讨论]`
+   - `[Step 2: 标题]`
+   - `[Step 3a: 内容生成]`
+   - `[Step 3b: 润色]`
+   - `[Step 4: 配图与发布确认]`
+   - `[Step 5: 发布]`
 
-## 步骤追踪
+2. **MANDATORY 每个 Step 结束后输出检查点块，然后停下来等用户说确认词。** 不能自己判断"差不多就过了"。确认词表：
 
-> 在每次回复开头标注当前步骤：`[Step 1: 头脑风暴]`。这让跳步对用户可见。
+   | 步骤 | 确认词 |
+   |------|--------|
+   | Step 1 | `确认选题` |
+   | Step 2 | `确认标题：X号` |
+   | Step 3a | `确认内容` |
+   | Step 3b | `确认润色` |
+   | Step 4 | `确认发布` |
+
+3. **MANDATORY 每个 Step 调用对应的子 skill，不要自己手动完成。** 调用白名单：
+   - Step 1 → `Skill('just-write:brainstorming')`
+   - Step 2 → `Skill('just-write:viral-title')`
+   - Step 3b → `Skill('just-write:humanizer-zh')`
+   - Step 5 → `Skill('just-write:baoyu-post-to-wechat')`
+
+4. **MANDATORY 写文章时每个事实性论断同步写入图片占位符。** 数据、引用、新闻事件必须带 `![描述](imgs/xxx.png)`。纯个人观点不需要。写完后再补 = 失败。
+
+5. **MANDATORY "确认内容"后立即输出截图来源清单。** 不能等用户问。格式见 Step 3a。
+
+6. **MANDATORY 不重启已完成步骤。** 如果用户在前一轮对话中已经完成了某步，从下一个未完成的步骤继续。
+
+---
 
 ## 工作流
 
 ```
-用户想法 → 头脑风暴 → 爆款标题 → 内容生成(迭代) → 润色 → 配图与发布确认 → 发布
+用户想法 → 选题讨论 → 爆款标题 → 内容生成(迭代) → 润色 → 配图与发布确认 → 发布
   Step 1    Step 2     Step 3a           Step 3b   Step 4           Step 5
 ```
 
-每个检查点需要用户说出特定确认词才能继续：
-
-| 步骤 | 确认词 |
-|------|--------|
-| Step 1 | `确认选题` |
-| Step 2 | `确认标题：X号` |
-| Step 3a | `确认内容` |
-| Step 3b | `确认润色` |
-| Step 4 | `确认发布` |
-
 ---
 
-## Step 1: 头脑风暴
+## Step 1: 选题讨论
 
-用 brainstorming skill 辅助选题。一次问一个问题，最多 5 个问题。
+**必须调用 `Skill('just-write:brainstorming')` 辅助选题。** brainstorming skill 会一次问一个问题（最多 3 个），帮用户理清主题和角度。
+
+**快速通道：** 如果用户已经明确说了主题和角度，直接确认选题，不需要再问。
 
 核心引导：
 1. 读者关心吗？（痛点/痒点/爽点至少占一个）
 2. 有独特视角或真实经历吗？
 3. 现在写合适吗？（时效性）
-
-**快速通道：** 如果用户已经明确说了主题和角度，直接确认选题，不需要再问。
 
 ### 检查点（必须输出）
 
@@ -72,13 +83,16 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ## Step 2: 标题
 
-用 viral-title skill 生成 3-5 个标题。
+**必须调用 `Skill('just-write:viral-title')` 生成 3-5 个标题。** 不要自己生成标题。
+
+标题必须包含至少一个热点关键词（具体人名/公司名/模型名/热门事件名）。纯抽象概念或比喻 = 不合格。
 
 **微信禁忌：** 不用"震惊！""刚刚！""必看！""99%的人不知道"。
 
 ### 检查点（必须输出）
 
 ```
+【标题候选】
 1.「...」（类型）
 2.「...」（类型）
 3.「...」（类型）
@@ -101,7 +115,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ### 图文一体（硬性要求）
 
-写每句话时同步判断：读者看到这句话，需要看到什么才能理解/相信？
+写每句话时，立即判断：这句话是否包含事实性论断？如果是，立即写 `![描述](imgs/xxx.png)` 占位符。
 
 | 论断类型 | 配图 |
 |---------|------|
@@ -111,7 +125,12 @@ description: Trigger immediately when user wants to write, create, or publish co
 | 专家观点 | 采访原文/社交媒体截图 |
 | 个人观点 | 通常不需要 |
 
-**写作时立即用 `![描述](imgs/xxx.png)` 标记位置。不在写完后再补。**
+正例：
+> Cursor 最近发了一份《开发者习惯报告》，周均代码产出从 3.6K 行涨到 8.6K 行。![Cursor 开发者习惯报告数据](imgs/03-cursor-report.png)
+
+反例（写完再补）：
+> Cursor 最近发了一份《开发者习惯报告》，周均代码产出从 3.6K 行涨到 8.6K 行。
+> ~~（写完整篇文章后才想起来要加图片占位符）~~
 
 ### 事实争议处理
 
@@ -124,7 +143,6 @@ description: Trigger immediately when user wants to write, create, or publish co
 理性、克制、有判断、不说教。
 - 先说问题，再讲道理
 - 少煽动，多判断
-- 数据标注来源（"据XX官方公布"）
 - 数字 + 参照系 + 具体场景
 - 承认局限增加信任
 - 倒金字塔（结论先行）
@@ -144,6 +162,8 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ### 截图来源清单（"确认内容"后立即输出）
 
+**用户说"确认内容"后的第一个动作就是输出这个清单。**
+
 ```
 【截图来源清单】
 | # | 文中位置 | 来源 URL | 截图要点 |
@@ -161,7 +181,9 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ## Step 3b: 润色
 
-用 humanizer-zh skill 润色文章。**只在用户确认内容后执行。**
+**前置条件：用户必须已说出"确认内容"。** 未确认前不得执行润色。
+
+**必须调用 `Skill('just-write:humanizer-zh')` 润色文章。** 不要自己手动润色。
 
 - 去 AI 写作痕迹（24条规则）
 - 提升文字质感
@@ -213,7 +235,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 内联图片：N 张
 封面图：[描述]
 
-确认后回复"确认发布"。
+确认后回复"确认发布"。未回复确认发布前不得执行任何发布操作。
 ```
 
 ---
@@ -224,13 +246,13 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ### 5.1 微信公众号
 
-用 baoyu-post-to-wechat skill 发布。
+**必须调用 `Skill('just-write:baoyu-post-to-wechat')` 发布。**
 
 ### 5.2 小红书（可选）
 
 微信发布后，检查 `.baoyu-skills/post-to-xhs/EXTEND.md` 的 `enabled` 配置：
 - `enabled: true` → 询问用户是否同步发小红书
-- 用户确认后调用 `post-to-xhs` skill
+- 用户确认后调用 `Skill('just-write:post-to-xhs')`
 
 ### 发布后
 
