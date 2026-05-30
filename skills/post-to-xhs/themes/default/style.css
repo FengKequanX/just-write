@@ -1,24 +1,31 @@
-/* Theme: default — Dark gradient cover, editorial content, dark ending */
-/* Optimized for 1080x1440 (3:4) at native resolution */
+/* Theme: default — "Quiet Observer"
+   Warm editorial · Copper accent · KaiTi display
+   Optimized for 1080×1440 (3:4) — Chrome headless screenshot */
 
 :root {
-  --bg: #FFFFFF;
-  --text: #1A1A2E;
-  --text-sec: #555566;
-  --accent: #3B82F6;
-  --accent-dark: #1E40AF;
-  --cover-start: #0F172A;
-  --cover-end: #1E3A5F;
-  --ending-start: #0F172A;
-  --ending-end: #1E293B;
-  --font-main: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  --bg: #FDFAF6;
+  --bg-warm: #F5EFE6;
+  --bg-subtle: #F8F4ED;
+  --text: #1A1A1E;
+  --text-sec: #5A5550;
+  --text-light: #9A938B;
+  --accent: #C67A3C;
+  --accent-dark: #A05A1F;
+  --accent-light: #E0A66A;
+  --accent-bg: #FDF2E6;
+  --accent-bg-light: #FEF9F2;
+  --border: #E8E2D9;
+  --font-display: "KaiTi", "楷体", Georgia, serif;
+  --font-body: "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "Consolas", monospace;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html { height: 100%; }
+
 body {
-  font-family: var(--font-main);
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   display: flex;
@@ -26,184 +33,166 @@ body {
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: 100%;
+  height: 100vh;
 }
 
 /* ==================== Cover Page ==================== */
 
 .cover {
+  background:
+    radial-gradient(ellipse at 85% 15%, rgba(198, 122, 60, 0.05) 0%, transparent 50%),
+    linear-gradient(175deg, var(--bg) 0%, var(--bg-warm) 50%, var(--bg) 100%);
   padding: 0;
-  justify-content: flex-end;
-  background: linear-gradient(170deg, #0a0f1e 0%, #0f2040 35%, #1a3a6a 70%, #0d1b3e 100%);
-  color: #FFFFFF;
   position: relative;
   overflow: hidden;
 }
 
-/* Large decorative circle — top right */
+/* Top-left corner bracket — editorial framing */
 .cover::before {
   content: '';
   position: absolute;
-  top: -120px;
-  right: -120px;
-  width: 520px;
-  height: 520px;
-  border: 3px solid rgba(96, 165, 250, 0.12);
-  border-radius: 50%;
-  pointer-events: none;
+  top: 48px;
+  left: 48px;
+  width: 52px;
+  height: 52px;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+  opacity: 0.35;
 }
 
-/* Smaller decorative circle — bottom left */
+/* Bottom-right accent line */
 .cover::after {
   content: '';
   position: absolute;
-  bottom: 160px;
-  left: -100px;
-  width: 360px;
-  height: 360px;
-  border: 2px solid rgba(96, 165, 250, 0.08);
-  border-radius: 50%;
-  pointer-events: none;
+  bottom: 64px;
+  right: 64px;
+  width: 80px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.25;
 }
 
-/* Decorative accent glow at top */
-.cover-accent-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  background: linear-gradient(90deg, var(--accent), #60A5FA, var(--accent));
-}
-
-/* Large translucent accent shape behind title */
-.cover-bg-shape {
-  position: absolute;
-  top: 200px;
-  right: -80px;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-/* Bottom gradient bar */
-.cover-bottom-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 100px;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.4));
-  pointer-events: none;
-}
-
-/* Title area container — takes most of the page */
-.cover .title-area {
-  position: relative;
-  z-index: 1;
-  padding: 80px 80px 120px;
-  flex: 1;
+/* Wrapper for vertical centering via flex:1 spacers on body */
+.cover .cover-content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  z-index: 1;
+}
+
+.cover .title-area {
+  display: flex;
+  flex-direction: column;
+  padding-left: 80px;
+  padding-right: 80px;
+  z-index: 1;
 }
 
 .cover .brand {
-  font-size: 22px;
-  color: rgba(96, 165, 250, 0.8);
-  font-weight: 600;
-  letter-spacing: 3px;
-  margin-bottom: 48px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--text-light);
+  letter-spacing: 4px;
+  margin-bottom: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
+/* Copper circle prefix for brand mark */
 .cover .brand::before {
   content: '';
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  background: var(--accent);
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--accent);
   border-radius: 50%;
-  margin-right: 14px;
-  vertical-align: middle;
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
 }
 
 .cover .title {
-  font-size: 64px;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-size: 72px;
+  font-weight: 700;
   line-height: 1.25;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
   max-width: 880px;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  color: var(--text);
   letter-spacing: 2px;
 }
 
 .cover .divider {
-  width: 80px;
-  height: 5px;
-  background: linear-gradient(90deg, var(--accent), #60A5FA);
-  margin: 0 0 32px;
-  border-radius: 3px;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  width: 56px;
+  height: 3px;
+  background: var(--accent);
+  margin: 0 0 36px;
 }
 
 .cover .subtitle {
   font-size: 28px;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1.6;
-  max-width: 840px;
-  margin-bottom: 24px;
+  color: var(--text-sec);
+  line-height: 1.8;
+  max-width: 820px;
+  letter-spacing: 0.5px;
 }
 
-/* Author bar at bottom — always visible */
 .cover .author {
-  position: absolute;
-  bottom: 56px;
-  left: 80px;
-  font-size: 24px;
-  color: rgba(255, 255, 255, 0.5);
+  padding: 0 80px 36px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text-light);
   z-index: 1;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Accent line at bottom of cover */
-.cover-accent {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--accent), #60A5FA, var(--accent));
+.cover .author::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 1px;
+  background: var(--text-light);
 }
 
-/* ==================== Content Page ==================== */
+/* ==================== Content Page — Base ==================== */
 
 .content {
-  padding: 72px 80px 100px;
-  background: #FFFFFF;
+  padding: 56px 72px 96px;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Short copper mark at top-left */
+.content-accent-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 48px;
+  height: 4px;
+  background: var(--accent);
 }
 
 .content .section-title {
-  font-size: 40px;
+  font-family: var(--font-display);
+  font-size: 36px;
   font-weight: 700;
   color: var(--text);
-  border-left: 6px solid var(--accent);
-  padding-left: 24px;
-  margin-bottom: 36px;
+  border-left: 4px solid var(--accent);
+  padding-left: 20px;
+  margin-bottom: 28px;
   line-height: 1.3;
+  letter-spacing: 1px;
 }
 
 .content .body {
-  font-size: 30px;
-  line-height: 1.85;
+  font-size: 27px;
+  line-height: 1.9;
   color: var(--text);
   flex: 1;
 }
 
-.content .body p {
-  margin-bottom: 22px;
-}
+.content .body p { margin-bottom: 18px; }
 
 .content .body strong {
   font-weight: 700;
@@ -217,55 +206,55 @@ body {
 
 .content .body img {
   width: 100%;
-  border-radius: 10px;
-  margin: 18px 0;
+  border-radius: 8px;
+  margin: 16px 0;
   display: block;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
 }
 
 .content .body blockquote {
-  border-left: 4px solid var(--accent);
+  border-left: 3px solid var(--accent);
   padding: 16px 20px;
-  background: #F0F4FF;
+  background: var(--accent-bg-light);
   color: var(--text);
   font-style: normal;
-  margin: 22px 0;
+  margin: 20px 0;
   border-radius: 0 8px 8px 0;
 }
 
 .content .body ul,
 .content .body ol {
-  margin: 14px 0;
-  padding-left: 32px;
+  margin: 12px 0;
+  padding-left: 28px;
 }
 
 .content .body li {
-  margin-bottom: 10px;
-  line-height: 1.75;
+  margin-bottom: 8px;
+  line-height: 1.8;
 }
 
-.content .body ul li::marker {
-  color: var(--accent);
-}
+.content .body ul li::marker { color: var(--accent); }
 
 .content .body code {
-  background: #F1F5F9;
+  background: var(--bg-warm);
   padding: 3px 8px;
   border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 25px;
-  color: #DC2626;
+  font-size: 24px;
+  color: var(--accent-dark);
 }
 
 .content .body pre {
-  background: #1E293B;
-  color: #E2E8F0;
-  padding: 22px;
-  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  padding: 20px;
+  border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: 23px;
+  font-size: 22px;
   line-height: 1.6;
   overflow: hidden;
-  margin: 22px 0;
+  margin: 20px 0;
+  border: 1px solid var(--border);
 }
 
 .content .body pre code {
@@ -275,78 +264,277 @@ body {
   font-size: inherit;
 }
 
+/* ==================== Content — Image Focus ==================== */
+
+.content--image .image-hero {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.content--image .image-hero img {
+  width: 100%;
+  display: block;
+  border-radius: 12px;
+}
+
+.content--image .image-caption {
+  font-size: 25px;
+  color: var(--text-sec);
+  line-height: 1.75;
+}
+
+.content--image .image-caption strong {
+  color: var(--text);
+}
+
+/* ==================== Content — Stat Cards ==================== */
+
+.content--stats .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--accent-bg-light);
+  border-radius: 12px;
+  padding: 24px 20px;
+  text-align: center;
+  border: 1px solid rgba(198, 122, 60, 0.12);
+}
+
+.stat-value {
+  font-family: Georgia, serif;
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 21px;
+  color: var(--text-sec);
+  line-height: 1.4;
+}
+
+.stat-context {
+  font-size: 26px;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+/* ==================== Content — Pull Quote ==================== */
+
+.content--quote .pull-quote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 32px 0;
+}
+
+.quote-mark {
+  font-family: Georgia, serif;
+  font-size: 96px;
+  line-height: 0.8;
+  color: var(--accent);
+  opacity: 0.2;
+  margin-bottom: -12px;
+}
+
+.quote-text {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 800px;
+  letter-spacing: 1px;
+}
+
+.quote-attribution {
+  margin-top: 20px;
+  font-size: 22px;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* ==================== Content — List Highlight ==================== */
+
+.content--list .highlight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.highlight-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--accent-bg-light);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.highlight-key {
+  font-size: 25px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+.highlight-value {
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* ==================== Content — Code Block ==================== */
+
+.content--code {
+  background: var(--bg-subtle);
+}
+
+.content--code .content-accent-line {
+  background: var(--accent);
+}
+
+.content--code .section-title {
+  color: var(--text);
+  border-left-color: var(--accent);
+}
+
+.content--code .body {
+  color: var(--text);
+}
+
+.content--code .body pre {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+}
+
+.content--code .body code {
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+}
+
+.content--code .body strong {
+  color: var(--accent-dark);
+}
+
+.content--code .body p {
+  color: var(--text-sec);
+}
+
 /* ==================== Ending Page ==================== */
 
 .ending {
-  padding: 100px 80px;
-  justify-content: center;
-  align-items: center;
+  padding: 0 80px;
   text-align: center;
-  background: linear-gradient(160deg, var(--ending-start) 0%, var(--ending-end) 100%);
-  color: #FFFFFF;
+  background:
+    radial-gradient(ellipse at 15% 85%, rgba(198, 122, 60, 0.04) 0%, transparent 50%),
+    linear-gradient(175deg, var(--bg) 0%, var(--bg-warm) 100%);
+  color: var(--text);
   position: relative;
+  overflow: hidden;
 }
 
+.ending .ending-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Bottom-left corner bracket — echoes the cover's top-left bracket */
 .ending::before {
   content: '';
   position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  border-radius: 2px;
+  bottom: 48px;
+  left: 48px;
+  width: 52px;
+  height: 52px;
+  border-bottom: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+  opacity: 0.3;
 }
 
 .ending .cta {
-  font-size: 48px;
-  font-weight: 800;
-  margin-bottom: 52px;
-  color: #FFFFFF;
-  letter-spacing: 4px;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+  letter-spacing: 8px;
+}
+
+.ending .cta-sub {
+  font-size: 22px;
+  color: var(--text-light);
+  margin-bottom: 24px;
+  letter-spacing: 1px;
+}
+
+.ending .divider {
+  width: 48px;
+  height: 3px;
+  background: var(--accent);
+  margin: 0 auto 24px;
 }
 
 .ending .tags {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
-  margin-bottom: 56px;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .ending .tag {
-  font-size: 26px;
-  color: #60A5FA;
-  background: rgba(59, 130, 246, 0.15);
-  padding: 10px 24px;
-  border-radius: 24px;
+  font-size: 22px;
+  color: var(--accent-dark);
+  background: var(--accent-bg-light);
+  padding: 8px 20px;
+  border-radius: 20px;
   font-weight: 500;
-  border: 1px solid rgba(96, 165, 250, 0.2);
+  border: 1px solid rgba(198, 122, 60, 0.12);
 }
 
 .ending .end-author {
-  font-size: 28px;
-  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--text-light);
+  position: relative;
+  z-index: 1;
+  letter-spacing: 2px;
 }
 
 .ending .end-author strong {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-sec);
   font-weight: 600;
 }
 
-/* ==================== Shared ==================== */
+/* ==================== Page Numbers ==================== */
 
 .page-num {
   position: absolute;
-  bottom: 44px;
-  right: 80px;
-  font-size: 20px;
-  color: rgba(0, 0, 0, 0.2);
+  bottom: 36px;
+  right: 72px;
+  font-size: 16px;
+  color: var(--text-light);
+  font-family: Georgia, serif;
   font-variant-numeric: tabular-nums;
 }
 
-.cover .page-num,
-.ending .page-num {
-  color: rgba(255, 255, 255, 0.2);
+.page-num .page-total {
+  opacity: 0.6;
 }

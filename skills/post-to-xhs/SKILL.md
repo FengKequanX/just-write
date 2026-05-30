@@ -1,10 +1,10 @@
 ---
 name: post-to-xhs
 description: >
-  将 Markdown 文章渲染为小红书轮播图并自动发布。
+  将 Markdown 文章渲染为小红书风格轮播图 PNG。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
-  "post to xhs"、"publish to xiaohongshu"时使用。
-version: 0.2.0
+  "post to xhs"时使用。
+version: 0.3.0
 metadata:
   openclaw:
     homepage: https://github.com/FengKequanX/just-write#post-to-xhs
@@ -16,7 +16,7 @@ metadata:
 
 # Post to Xiaohongshu (小红书)
 
-将 Markdown 文章渲染为小红书风格轮播图，并通过浏览器自动化发布。
+将 Markdown 文章渲染为小红书风格轮播图 PNG，生成文案（caption.md），用户手动上传到小红书创作者平台。
 
 ## Language
 
@@ -29,21 +29,30 @@ metadata:
 | Script | Purpose |
 |--------|----------|
 | `scripts/md-to-xhs.ts` | Markdown → 小红书轮播图 PNG (Chrome headless) |
-| `scripts/xhs-publisher.ts` | 浏览器自动化发布到小红书 (Playwright) |
 
 ## Rendering Backend
 
-**Carousel images** use Chrome native `--headless --screenshot` for reliable cross-platform rendering. No Playwright needed for rendering.
-
-**Publisher** uses Playwright for browser automation (form filling, file upload).
+Uses Chrome/Edge native `--headless=new --screenshot` for reliable cross-platform rendering. No Playwright dependency.
 
 **Chrome discovery** (resolution order):
 1. `CHROME_PATH` env var
 2. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` env var
-3. Platform defaults: Windows (`%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe`), macOS (`/Applications/Google Chrome.app`), Linux (`/usr/bin/google-chrome`)
-4. Playwright bundled Chromium (auto-detected from `ms-playwright` directory)
+3. Platform defaults: Windows (`chrome.exe` / `msedge.exe`), macOS (`Google Chrome.app`), Linux (`/usr/bin/google-chrome`)
 
-If Chrome is not found, the script errors with install instructions. Set `CHROME_PATH` to override.
+If Chrome/Edge is not found, the script errors with install instructions. Set `CHROME_PATH` to override.
+
+## Content-Aware Layout
+
+The renderer analyzes each content section and picks the best layout:
+
+| Layout | Trigger | Design |
+|--------|---------|--------|
+| `prose` | Default | White background, blue accent title, standard typography |
+| `image-focus` | Image + short text | Large image with rounded corners + shadow, text as caption |
+| `stats` | Bold numbers/percentages | Blue gradient stat cards with large values |
+| `pull-quote` | Blockquote as main content | Centered large quote with decorative quotation mark |
+| `list-highlight` | `**term**: desc` patterns | Blue sidebar highlight items |
+| `code` | Code blocks | Dark background page, syntax-highlighted code |
 
 ## Preferences (EXTEND.md)
 
@@ -69,45 +78,35 @@ default_author: 作者名
 default_theme: default
 default_aspect: 3:4
 default_topic_tags: AI观察,科技,编程
-default_caption_style: 干货型
-browser_profile_path: ~/.baoyu-skills/xhs-chrome-profile
 ```
 
-**Theme options**: `default` (dark gradient cover, editorial content)
+**Theme options**: `default` (dark gradient cover, content-aware layouts, dark ending)
 
 **Aspect ratio options**: `3:4` (1080×1440, default) / `9:16` / `1:1` / `4:3`
-
-**Caption style options**: `干货型` (default) / `种草型` / `故事型`
 
 ## Workflow
 
 ```
-XHS Publishing Progress:
+XHS Rendering Progress:
 - [ ] Step 0: Load preferences (EXTEND.md)
 - [ ] Step 1: Render markdown to carousel images
-- [ ] Step 2: Generate caption
-- [ ] Step 3: Auto-publish to Xiaohongshu
-- [ ] Step 4: Report completion
+- [ ] Step 2: Report completion
 ```
 
 ### Step 0: Load Preferences
 
-Check and load EXTEND.md settings.
-
-**CRITICAL**: If not found, run first-time setup BEFORE any other steps.
+Check and load EXTEND.md settings. If not found, use defaults.
 
 Resolve defaults:
 - `default_author` (from EXTEND.md or prompt)
 - `default_theme` (default `default`)
 - `default_aspect` (default `3:4`)
 - `default_topic_tags` (comma-separated hashtags)
-- `default_caption_style` (default `干货型`)
-- `browser_profile_path` (for session persistence)
 
 ### Step 1: Render Markdown to Carousel Images
 
 ```bash
-${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--theme default] [--aspect 3:4] [--author 作者名]
+${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--theme default] [--aspect 3:4] [--author 作者名] [--tags "tag1,tag2"]
 ```
 
 **Parameters**:
@@ -122,11 +121,12 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 | `--tags <tags>` | Comma-separated topic tags for ending page |
 
 **Rendering rules**:
-- First H1 section → Cover page (title + subtitle + author + brand mark)
-- H2 sections → Content pages (section title + body text + inline images)
-- Auto-generated → Ending page (CTA + hashtags + author)
-- Content overflow → Auto-split into multiple pages by paragraph (heuristic)
-- Inline images (`![](path)`) → Embedded and rendered
+- Frontmatter title → Cover page title
+- Frontmatter description → Cover page subtitle
+- H2 sections → Content pages with content-aware layouts
+- Content overflow → Auto-split into multiple pages by paragraph
+- Inline images → Embedded and rendered
+- Ending page → CTA + hashtags + author
 
 **Output structure**:
 
@@ -136,110 +136,51 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 ├── 02-content-<slug>.png
 ├── 03-content-<slug>.png
 ├── ...
-└── NN-ending.png
+├── NN-ending.png
+└── caption.md
 ```
 
-### Step 2: Generate Caption
-
-Auto-generate from article content:
-
-- **Title**: Article H1, truncated to 20 chars if needed
-- **Description**: First paragraph or summary, max 300 chars
-- **Hashtags**: From EXTEND.md `default_topic_tags` + auto-extracted from content
-
-Write to `<output-dir>/caption.md`.
-
-**Caption styles**:
-
-| Style | Best for | Tone |
-|-------|----------|------|
-| `干货型` (default) | 教程、技术、知识分享 | 直接、信息密度高 |
-| `种草型` | 推荐、测评、好物分享 | 情感驱动、痛点共鸣 |
-| `故事型` | 经验分享、复盘、成长 | 叙事、代入感 |
-
-### Step 3: Auto-Publish to Xiaohongshu
-
-```bash
-${BUN_X} {baseDir}/scripts/xhs-publisher.ts --images <dir> [--title <text>] [--desc <text>] [--profile <dir>] [--dry-run]
-```
-
-**Parameters**:
-
-| Parameter | Description |
-|-----------|-------------|
-| `--images <dir>` | Directory containing carousel images |
-| `--title <text>` | Note title (max 20 chars, from caption.md if omitted) |
-| `--desc <text>` | Note description (from caption.md if omitted) |
-| `--profile <dir>` | Chrome profile path (for session persistence) |
-| `--dry-run` | Preview without publishing |
-
-**Publishing flow**:
-1. Launch Chromium with persistent profile
-2. Navigate to `https://creator.xiaohongshu.com/publish/publish`
-3. If not logged in → display QR code, wait for scan (timeout: 120s)
-4. Upload carousel images
-5. Fill title and description
-6. Click publish
-7. Verify success
-
-### Step 4: Completion Report
+### Step 2: Completion Report
 
 ```
-Xiaohongshu Publishing Complete!
+Xiaohongshu Images Generated!
 
 Input: [markdown-file]
 Theme: [theme] · Aspect: [ratio]
 
 Images: [N] total
-- 01-cover.png ✓ Cover
-- 02-content-[slug].png ✓ Content
+- 01-cover.png ✓ Cover (dark gradient)
+- 02-content-[slug].png ✓ Content ([layout-type])
 - ...
-- NN-ending.png ✓ Ending
+- NN-ending.png ✓ Ending (dark gradient)
 
-Caption:
+Caption: [output-dir]/caption.md
 • Title: [title]
-• Style: [caption style]
 • Hashtags: [tags]
 
-Result:
-✓ Published to Xiaohongshu
-
-Files:
-• [output-dir]/caption.md
-• [output-dir]/*.png
+Next step:
+→ 打开小红书创作者平台手动上传图片
+→ https://creator.xiaohongshu.com/publish/publish
 ```
 
 ## Integration with just-write
 
-When used as part of the just-write plugin, this skill triggers after WeChat publishing (if configured in EXTEND.md):
-
-```md
-platforms:
-  wechat: true
-  xhs: true
-```
-
-Set `xhs: false` to skip Xiaohongshu publishing.
+When used as part of the just-write plugin, this skill triggers after WeChat publishing.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Chrome not found | Install Google Chrome or set `CHROME_PATH` env var |
+| Chrome/Edge not found | Install Google Chrome or Microsoft Edge, or set `CHROME_PATH` env var |
 | Rendering fails | Check Chrome version ≥ 112 (required for `--headless=new`) |
+| Chinese path errors | Script uses ASCII temp path internally; should work for all paths |
 | Content overflow | Auto-split by heuristic; check output images and adjust content length |
-| QR code timeout | Re-run, scan within 120 seconds |
-| Image upload fails | Check format (PNG/JPG only), max 20 images per note |
-| Session expired | Delete profile dir, re-login with QR code |
-| Title too long | Auto-truncated to 20 chars |
-| Publisher browser fails | `npx playwright install chromium` (publisher uses Playwright) |
+| Title too long | Auto-truncated to 20 chars in caption |
 
 ## Prerequisites
 
 - `bun` runtime (or `npx`)
-- Google Chrome or Chromium (≥ 112 for headless screenshots)
-- Playwright with Chromium (for publisher only: `npx playwright install chromium`)
-- Xiaohongshu account (for publishing)
+- Google Chrome or Microsoft Edge (≥ 112 for headless screenshots)
 
 ## Extension Support
 

@@ -4,19 +4,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
-import { marked } from 'marked';
+import { marked, type Token } from 'marked';
 
 // --- Types ---
 
-interface AspectSize {
-  width: number;
-  height: number;
-}
+interface AspectSize { width: number; height: number }
+
+type ContentLayout = 'prose' | 'image-focus' | 'stats' | 'pull-quote' | 'list-highlight' | 'code';
 
 interface PageSection {
   type: 'cover' | 'content' | 'ending';
   title: string;
   bodyHtml: string;
+  rawTokens: Token[];
+  layout: ContentLayout;
   slug: string;
   tags?: string[];
   author?: string;
@@ -24,7 +25,7 @@ interface PageSection {
 
 interface MarkdownSection {
   heading?: { depth: number; text: string };
-  tokens: marked.Token[];
+  tokens: Token[];
 }
 
 interface Frontmatter {
@@ -44,14 +45,14 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 };
 
 const DEFAULT_ASPECT = '3:4';
-const CONTENT_TOP_PAD = 72;
-const CONTENT_BOTTOM_PAD = 100;
-const PAGE_NUM_HEIGHT = 48;
-const SECTION_TITLE_HEIGHT = 120;
-const CHARS_PER_LINE = 30;
-const LINE_HEIGHT_PX = 56; // 30px font * 1.85 line-height ≈ 56px per line
-const IMG_EST_HEIGHT = 400;
-const BLOCK_PADDING = 24;
+const CONTENT_TOP_PAD = 56;
+const CONTENT_BOTTOM_PAD = 96;
+const PAGE_NUM_HEIGHT = 40;
+const SECTION_TITLE_HEIGHT = 110;
+const CHARS_PER_LINE = 36;
+const LINE_HEIGHT_PX = 48;
+const IMG_EST_HEIGHT = 200;
+const BLOCK_PADDING = 12;
 
 // --- Chrome Discovery ---
 
@@ -75,48 +76,13 @@ function findChrome(): string {
     if (pf) candidates.push(path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'));
     if (pf86) candidates.push(path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'));
     if (local) candidates.push(path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'));
-    // Edge (Chromium-based)
     if (pf) candidates.push(path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
     if (pf86) candidates.push(path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
-
-    // Playwright's bundled Chromium — search recursively for chrome.exe
-    const localAppData = local || '';
-    const pwDir = path.join(localAppData, 'ms-playwright');
-    if (fs.existsSync(pwDir)) {
-      for (const entry of fs.readdirSync(pwDir)) {
-        if (entry.startsWith('chromium') && !entry.includes('headless')) {
-          const subDir = path.join(pwDir, entry);
-          try {
-            for (const sub of fs.readdirSync(subDir)) {
-              const candidate = path.join(subDir, sub, 'chrome.exe');
-              if (fs.existsSync(candidate)) candidates.push(candidate);
-            }
-          } catch { /* not a dir */ }
-        }
-      }
-    }
   } else if (platform === 'darwin') {
     candidates.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
     candidates.push('/Applications/Chromium.app/Contents/MacOS/Chromium');
-    // Playwright bundled
-    const pwDir = path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright');
-    if (fs.existsSync(pwDir)) {
-      for (const entry of fs.readdirSync(pwDir)) {
-        if (entry.startsWith('chromium')) {
-          candidates.push(path.join(pwDir, entry, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'));
-        }
-      }
-    }
   } else {
     candidates.push('/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium');
-    const pwDir = path.join(os.homedir(), '.cache', 'ms-playwright');
-    if (fs.existsSync(pwDir)) {
-      for (const entry of fs.readdirSync(pwDir)) {
-        if (entry.startsWith('chromium')) {
-          candidates.push(path.join(pwDir, entry, 'chrome-linux', 'chrome'));
-        }
-      }
-    }
   }
 
   for (const c of candidates) {
@@ -124,7 +90,7 @@ function findChrome(): string {
   }
 
   throw new Error(
-    'Chrome not found. Set CHROME_PATH env var or install Google Chrome.\n' +
+    'Chrome/Edge not found. Set CHROME_PATH env var or install Google Chrome.\n' +
     'Download: https://www.google.com/chrome/',
   );
 }
@@ -132,33 +98,35 @@ function findChrome(): string {
 // --- Chrome Rendering ---
 
 function renderWithChrome(
-  htmlPath: string,
+  html: string,
   outputPath: string,
   width: number,
   height: number,
 ): Promise<void> {
   const chrome = findChrome();
-  const fileUrl = pathToFileURL(htmlPath).href;
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const tmpHtml = path.join(os.tmpdir(), `xhs-render-${id}.html`);
+  const tmpPng = path.join(os.tmpdir(), `xhs-render-${id}.png`);
+  const fileUrl = pathToFileURL(tmpHtml).href;
+
+  fs.writeFileSync(tmpHtml, html);
 
   return new Promise<void>((resolve, reject) => {
     const args = [
       '--headless=new',
       '--disable-gpu',
       '--no-sandbox',
-      '--disable-extensions',
-      '--disable-software-rasterizer',
-      `--window-size=${width},${height}`,
-      '--default-background-color=00000000',
       '--hide-scrollbars',
-      `--screenshot=${outputPath}`,
+      '--run-all-compositor-stages-before-draw',
+      `--window-size=${width},${height}`,
+      `--screenshot=${tmpPng}`,
       fileUrl,
     ];
 
     const proc = spawn(chrome, args, { stdio: 'pipe' });
-
     const timeout = setTimeout(() => {
       proc.kill();
-      reject(new Error(`Chrome screenshot timed out for ${path.basename(htmlPath)}`));
+      reject(new Error(`Chrome screenshot timed out`));
     }, 30_000);
 
     let stderr = '';
@@ -166,10 +134,18 @@ function renderWithChrome(
 
     proc.on('close', (code) => {
       clearTimeout(timeout);
-      if (code === 0 && fs.existsSync(outputPath)) {
+      if (code !== 0 || !fs.existsSync(tmpPng)) {
+        reject(new Error(`Chrome exited ${code}: ${stderr.slice(0, 200)}`));
+        return;
+      }
+      try {
+        fs.copyFileSync(tmpPng, outputPath);
         resolve();
-      } else {
-        reject(new Error(`Chrome exited with code ${code}: ${stderr.slice(0, 200)}`));
+      } catch (err) {
+        reject(err);
+      } finally {
+        try { fs.unlinkSync(tmpHtml); } catch { /* */ }
+        try { fs.unlinkSync(tmpPng); } catch { /* */ }
       }
     });
 
@@ -225,9 +201,102 @@ function resolveImagePaths(html: string, baseDir: string): string {
   );
 }
 
+// --- Content Analysis ---
+
+function analyzeContent(tokens: Token[]): ContentLayout {
+  let hasImage = false;
+  let hasBlockquote = false;
+  let hasCode = false;
+  let boldWithNumbers = 0;
+  let colonBoldList = 0;
+  let textLength = 0;
+
+  for (const token of tokens) {
+    if (token.type === 'image') hasImage = true;
+    if (token.type === 'code') hasCode = true;
+    if (token.type === 'blockquote') hasBlockquote = true;
+
+    if (token.type === 'paragraph' && 'text' in token) {
+      textLength += token.text.length;
+      // Detect bold numbers: **95%**, **$10B**, **3.6K→8.6K**, **650亿**
+      const numMatches = token.text.match(/\*\*[\d$￥€][\d.万化百KMB$￥€%→\s]+\*\*/g);
+      if (numMatches) boldWithNumbers += numMatches.length;
+      // Detect **term**: description patterns
+      const colonMatches = token.text.match(/\*\*[^*]+\*\*[：:]/g);
+      if (colonMatches) colonBoldList += colonMatches.length;
+    }
+
+    if (token.type === 'list' && 'items' in token) {
+      for (const item of (token as { items: { text: string }[] }).items || []) {
+        textLength += item.text.length;
+        const numMatches = item.text.match(/\*\*[\d$￥€][\d.万化百KMB$￥€%→\s]+\*\*/g);
+        if (numMatches) boldWithNumbers += numMatches.length;
+        const colonMatches = item.text.match(/\*\*[^*]+\*\*[：:]/g);
+        if (colonMatches) colonBoldList += colonMatches.length;
+      }
+    }
+  }
+
+  // Priority order
+  if (hasCode) return 'code';
+  if (hasImage && textLength < 200) return 'image-focus';
+  if (boldWithNumbers >= 2) return 'stats';
+  if (hasBlockquote && textLength < 300) return 'pull-quote';
+  if (colonBoldList >= 2) return 'list-highlight';
+  return 'prose';
+}
+
+function extractStats(tokens: Token[]): { value: string; label: string }[] {
+  const stats: { value: string; label: string }[] = [];
+
+  for (const token of tokens) {
+    if (stats.length >= 3) break;
+    if (token.type === 'paragraph' && 'text' in token) {
+      const matches = [...token.text.matchAll(/\*\*([^*]+)\*\*[：:\s]*([^*]{1,40}?)(?=[。，；,;]|$)/g)];
+      for (const m of matches) {
+        if (stats.length < 3 && /[\d$￥€%]/.test(m[1]!)) {
+          stats.push({ value: m[1]!, label: m[2]!.trim() });
+        }
+      }
+    }
+    if (token.type === 'list' && 'items' in token) {
+      for (const item of (token as { items: { text: string }[] }).items || []) {
+        if (stats.length >= 3) break;
+        const m = item.text.match(/\*\*([^*]+)\*\*[：:\s]*([^*]{1,40}?)(?=[。，；,;]|$)/);
+        if (m && /[\d$￥€%]/.test(m[1]!)) {
+          stats.push({ value: m[1]!, label: m[2]!.trim() });
+        }
+      }
+    }
+  }
+
+  return stats;
+}
+
+function extractQuote(tokens: Token[]): { text: string; attribution?: string } | null {
+  for (const token of tokens) {
+    if (token.type === 'blockquote' && 'text' in token) {
+      const quoteText = token.text.trim();
+      if (quoteText.length > 10) {
+        return { text: quoteText };
+      }
+    }
+  }
+  return null;
+}
+
+function extractImage(tokens: Token[]): string | null {
+  for (const token of tokens) {
+    if (token.type === 'image' && 'href' in token) {
+      return token.href;
+    }
+  }
+  return null;
+}
+
 // --- Markdown Parsing ---
 
-function splitByHeadings(tokens: marked.Token[]): MarkdownSection[] {
+function splitByHeadings(tokens: Token[]): MarkdownSection[] {
   const sections: MarkdownSection[] = [];
   let current: MarkdownSection = { tokens: [] };
 
@@ -236,10 +305,7 @@ function splitByHeadings(tokens: marked.Token[]): MarkdownSection[] {
       if (current.tokens.length > 0 || current.heading) {
         sections.push(current);
       }
-      current = {
-        heading: { depth: token.depth, text: token.text },
-        tokens: [],
-      };
+      current = { heading: { depth: token.depth, text: token.text }, tokens: [] };
     } else if (token.type !== 'hr') {
       current.tokens.push(token);
     }
@@ -276,50 +342,69 @@ function buildPageSections(
     type: 'cover',
     title: mainTitle,
     bodyHtml: subtitle,
+    rawTokens: [],
+    layout: 'prose',
     slug: 'cover',
   });
 
   for (const section of sections) {
+    const sectionTokens = section.tokens;
+    const layout = analyzeContent(sectionTokens);
+    const html = marked.parse(sectionTokens.map((t) => t.raw).join('')) as string;
+
     if (section.heading?.depth === 1) {
-      const bodyTokens = section.tokens.filter((t) => {
+      const bodyTokens = sectionTokens.filter((t) => {
         if (t.type === 'paragraph' && 'text' in t && t.text.slice(0, 100) === subtitle) {
           return false;
         }
         return true;
       });
       if (bodyTokens.length > 0) {
-        const html = marked.parse(bodyTokens.map((t) => t.raw).join('')) as string;
-        if (html.trim()) {
-          pages.push({ type: 'content', title: '', bodyHtml: html, slug: 'intro' });
+        const bodyHtml = marked.parse(bodyTokens.map((t) => t.raw).join('')) as string;
+        if (bodyHtml.trim()) {
+          pages.push({
+            type: 'content',
+            title: '',
+            bodyHtml,
+            rawTokens: bodyTokens,
+            layout: analyzeContent(bodyTokens),
+            slug: 'intro',
+          });
         }
       }
     } else if (section.heading?.depth === 2) {
-      const html = marked.parse(section.tokens.map((t) => t.raw).join('')) as string;
       pages.push({
         type: 'content',
         title: section.heading.text,
         bodyHtml: html,
+        rawTokens: sectionTokens,
+        layout,
         slug: slugify(section.heading.text),
       });
-    } else if (!section.heading && section.tokens.length > 0) {
-      const html = marked.parse(section.tokens.map((t) => t.raw).join('')) as string;
+    } else if (!section.heading && sectionTokens.length > 0) {
       if (html.trim()) {
-        pages.push({ type: 'content', title: '', bodyHtml: html, slug: 'intro' });
+        pages.push({
+          type: 'content',
+          title: '',
+          bodyHtml: html,
+          rawTokens: sectionTokens,
+          layout,
+          slug: 'intro',
+        });
       }
     }
   }
 
   const tags = topicTags
-    ? topicTags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean)
+    ? topicTags.split(',').map((t) => t.trim()).filter(Boolean)
     : [];
 
   pages.push({
     type: 'ending',
     title: '',
     bodyHtml: '',
+    rawTokens: [],
+    layout: 'prose',
     slug: 'ending',
     tags,
     author: author || fm.author || '作者名',
@@ -345,44 +430,147 @@ function loadCss(theme: string): string {
   }
 }
 
+function pageNumHtml(current: number, total: number): string {
+  return `<div class="page-num"><span class="page-current">${current}</span> / <span class="page-total">${total}</span></div>`;
+}
+
 function buildCoverHtml(
   title: string,
   subtitle: string,
   author: string,
   css: string,
   pageNum: number,
+  totalPages: number,
+  dims: string,
+  _pageHeight: number,
 ): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
-<body class="cover">
-  <div class="cover-accent-glow"></div>
-  <div class="cover-bg-shape"></div>
-  <div class="title-area">
-    <div class="brand">${escapeHtml(author)}</div>
-    <div class="title">${escapeHtml(title)}</div>
-    <div class="divider"></div>
-    ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
+<body class="cover" style="${dims}">
+  <div style="flex:1"></div>
+  <div class="cover-content">
+    <div class="title-area">
+      <div class="brand">${escapeHtml(author)}</div>
+      <div class="title">${escapeHtml(title)}</div>
+      <div class="divider"></div>
+      ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
+    </div>
+    <div class="author">${escapeHtml(author)}</div>
   </div>
-  <div class="cover-bottom-bar"></div>
-  <div class="author">${escapeHtml(author)}</div>
-  <div class="page-num">${pageNum}</div>
+  <div style="flex:1"></div>
+  ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
 
 function buildContentHtml(
   sectionTitle: string,
   bodyHtml: string,
+  layout: ContentLayout,
+  rawTokens: Token[],
   css: string,
   pageNum: number,
+  totalPages: number,
+  dims: string,
 ): string {
+  const layoutClass = `content--${layout}`;
+  const titleHtml = sectionTitle
+    ? `<div class="section-title">${escapeHtml(sectionTitle)}</div>`
+    : '';
+
+  let bodyContent: string;
+
+  switch (layout) {
+    case 'image-focus': {
+      const imgSrc = extractImage(rawTokens);
+      if (imgSrc) {
+        const nonImgTokens = rawTokens.filter((t) => t.type !== 'image');
+        const caption = nonImgTokens.length > 0
+          ? marked.parse(nonImgTokens.map((t) => t.raw).join('')) as string
+          : '';
+        bodyContent = `<div class="image-hero"><img src="${escapeHtml(imgSrc)}" alt=""></div>` +
+          (caption ? `<div class="image-caption">${caption}</div>` : '');
+      } else {
+        bodyContent = `<div class="body">${bodyHtml}</div>`;
+      }
+      break;
+    }
+
+    case 'stats': {
+      const stats = extractStats(rawTokens);
+      if (stats.length >= 2) {
+        const statCards = stats.map((s) =>
+          `<div class="stat-card"><div class="stat-value">${escapeHtml(s.value)}</div><div class="stat-label">${escapeHtml(s.label)}</div></div>`,
+        ).join('\n    ');
+        // Remaining non-stat text
+        const nonStatHtml = bodyHtml
+          .replace(/\*\*[^*]+\*\*[：:\s]*[^*]{1,40}?(?=[。，；,;]|<|$)/g, '')
+          .replace(/<p>\s*<\/p>/g, '')
+          .trim();
+        bodyContent = `<div class="stats-grid">\n    ${statCards}\n  </div>` +
+          (nonStatHtml ? `\n  <div class="stat-context">${nonStatHtml}</div>` : '');
+      } else {
+        bodyContent = `<div class="body">${bodyHtml}</div>`;
+      }
+      break;
+    }
+
+    case 'pull-quote': {
+      const quote = extractQuote(rawTokens);
+      if (quote) {
+        const nonQuoteTokens = rawTokens.filter((t) => t.type !== 'blockquote');
+        const context = nonQuoteTokens.length > 0
+          ? marked.parse(nonQuoteTokens.map((t) => t.raw).join('')) as string
+          : '';
+        bodyContent = `<div class="pull-quote">` +
+          `<div class="quote-mark">“</div>` +
+          `<div class="quote-text">${escapeHtml(quote.text)}</div>` +
+          (quote.attribution ? `<div class="quote-attribution">${escapeHtml(quote.attribution)}</div>` : '') +
+          `</div>` +
+          (context ? `\n  <div class="body">${context}</div>` : '');
+      } else {
+        bodyContent = `<div class="body">${bodyHtml}</div>`;
+      }
+      break;
+    }
+
+    case 'list-highlight': {
+      // Extract **key**: value pairs and render as highlight items
+      const listItems: { key: string; value: string }[] = [];
+      for (const token of rawTokens) {
+        if (token.type === 'list' && 'items' in token) {
+          for (const item of (token as { items: { text: string }[] }).items || []) {
+            const m = item.text.match(/\*\*([^*]+)\*\*[：:]\s*(.*)/);
+            if (m) listItems.push({ key: m[1]!, value: m[2]! });
+          }
+        }
+      }
+
+      if (listItems.length >= 2) {
+        const itemsHtml = listItems.map((item) =>
+          `<div class="highlight-item"><div class="highlight-key">${escapeHtml(item.key)}</div><div class="highlight-value">${escapeHtml(item.value)}</div></div>`,
+        ).join('\n    ');
+        bodyContent = `<div class="highlight-list">\n    ${itemsHtml}\n  </div>`;
+      } else {
+        bodyContent = `<div class="body">${bodyHtml}</div>`;
+      }
+      break;
+    }
+
+    case 'code':
+    default:
+      bodyContent = `<div class="body">${bodyHtml}</div>`;
+      break;
+  }
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
-<body class="content">
-  ${sectionTitle ? `<div class="section-title">${escapeHtml(sectionTitle)}</div>` : ''}
-  <div class="body">${bodyHtml}</div>
-  <div class="page-num">${pageNum}</div>
+<body class="content ${layoutClass}" style="${dims}">
+  <div class="content-accent-line"></div>
+  ${titleHtml}
+  ${bodyContent}
+  ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
 
@@ -391,28 +579,33 @@ function buildEndingHtml(
   author: string,
   css: string,
   pageNum: number,
+  totalPages: number,
+  dims: string,
 ): string {
   const tagHtml = tags.map((t) => `<span class="tag">#${escapeHtml(t)}</span>`).join('\n    ');
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
-<body class="ending">
-  <div class="cta">感谢阅读</div>
-  <div class="tags">
-    ${tagHtml}
+<body class="ending" style="${dims}">
+  <div style="flex:1"></div>
+  <div class="ending-content">
+    <div class="cta">感谢阅读</div>
+    <div class="cta-sub">关注我，获取更多精彩内容</div>
+    <div class="divider"></div>
+    <div class="tags">
+      ${tagHtml}
+    </div>
+    <div class="end-author">— <strong>${escapeHtml(author)}</strong></div>
   </div>
-  <div class="end-author">— <strong>${escapeHtml(author)}</strong></div>
-  <div class="page-num">${pageNum}</div>
+  <div style="flex:1"></div>
+  ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
 
 // --- Heuristic Content Splitting ---
 
 function estimateHtmlHeight(html: string): number {
-  // Count images
   const imgCount = (html.match(/<img\s/g) || []).length;
-
-  // Count block-level elements for their padding
   const blockCount =
     (html.match(/<\/p>/g) || []).length +
     (html.match(/<\/h[1-6]>/g) || []).length +
@@ -420,26 +613,14 @@ function estimateHtmlHeight(html: string): number {
     (html.match(/<\/ul>/g) || []).length +
     (html.match(/<\/ol>/g) || []).length +
     (html.match(/<\/pre>/g) || []).length;
-
-  // Count code blocks (they're taller per line)
   const preCount = (html.match(/<\/pre>/g) || []).length;
 
-  // Strip HTML tags to get text length
   const text = html.replace(/<[^>]+>/g, '').replace(/&[^;]+;/g, 'x');
   const charCount = text.length;
-
-  // Estimate lines from characters
   const textLines = Math.ceil(charCount / CHARS_PER_LINE);
   const textHeight = textLines * LINE_HEIGHT_PX;
-
-  // Add image heights
   const imgHeight = imgCount * IMG_EST_HEIGHT;
-
-  // Add block padding (between consecutive blocks)
   const blockPadding = blockCount > 1 ? (blockCount - 1) * BLOCK_PADDING : 0;
-
-  // Code blocks use smaller font but more compact — already counted in charCount
-  // Add a small bonus for pre blocks (background, padding)
   const preExtra = preCount * 48;
 
   return textHeight + imgHeight + blockPadding + preExtra;
@@ -457,19 +638,12 @@ function splitHtmlAtBlockBoundaries(html: string): string[] {
   if (lastIndex < html.length) {
     parts.push(html.slice(lastIndex));
   }
-
   return parts.filter((p) => p.trim().length > 0);
 }
 
-function estimateContentPages(
-  bodyHtml: string,
-  availableHeight: number,
-): string[] {
+function estimateContentPages(bodyHtml: string, availableHeight: number): string[] {
   const totalHeight = estimateHtmlHeight(bodyHtml);
-
-  if (totalHeight <= availableHeight) {
-    return [bodyHtml];
-  }
+  if (totalHeight <= availableHeight) return [bodyHtml];
 
   const blocks = splitHtmlAtBlockBoundaries(bodyHtml);
   if (blocks.length === 0) return [bodyHtml];
@@ -477,11 +651,10 @@ function estimateContentPages(
   const pages: string[] = [];
   let currentPage = '';
   let currentHeight = 0;
-  const safeHeight = availableHeight * 0.85;
+  const safeHeight = availableHeight;
 
   for (const block of blocks) {
     const blockHeight = estimateHtmlHeight(block);
-
     if (currentHeight + blockHeight > safeHeight && currentPage.trim()) {
       pages.push(currentPage);
       currentPage = block;
@@ -492,10 +665,7 @@ function estimateContentPages(
     }
   }
 
-  if (currentPage.trim()) {
-    pages.push(currentPage);
-  }
-
+  if (currentPage.trim()) pages.push(currentPage);
   return pages.length > 0 ? pages : [bodyHtml];
 }
 
@@ -510,29 +680,51 @@ function generateCaption(
 ): string {
   const truncatedTitle = title.length > 20 ? title.slice(0, 18) + '...' : title;
 
-  const lines = body.split('\n').filter((l) => {
-    const trimmed = l.trim();
-    return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('![') && !trimmed.startsWith('---');
-  });
-  let description = lines.slice(0, 5).join(' ').slice(0, 300);
-  if (!description) description = fm.description || '';
+  const description = fm.description || fm.summary || '';
 
-  const tags = topicTags
-    ? topicTags
-        .split(',')
-        .map((t) => `#${t.trim()}`)
-        .filter(Boolean)
+  const userTags = topicTags
+    ? topicTags.split(',').map((t) => t.trim()).filter(Boolean)
     : [];
+
+  const contentTags = extractContentTags(body);
+  const allTags = [...new Set([...userTags, ...contentTags])];
+  const tagStr = allTags.map((t) => `#${t}`).join(' ');
 
   return [
     truncatedTitle,
     '',
     description,
     '',
-    tags.join(' '),
+    tagStr,
     '',
     `— ${author || '作者名'}`,
   ].join('\n');
+}
+
+function extractContentTags(body: string): string[] {
+  const tags: string[] = [];
+  const text = body.toLowerCase();
+
+  const keywords: Record<string, string> = {
+    'altman': 'Altman',
+    'amodei': 'Amodei',
+    'openai': 'OpenAI',
+    'anthropic': 'Anthropic',
+    'cursor': 'Cursor',
+    'ai': 'AI',
+    '裁员': '裁员',
+    '就业': '就业',
+    '代码': '编程',
+    '开发者': '开发者',
+    '融资': '融资',
+    '焦虑': '焦虑',
+  };
+
+  for (const [kw, tag] of Object.entries(keywords)) {
+    if (text.includes(kw)) tags.push(tag);
+  }
+
+  return tags.slice(0, 6);
 }
 
 // --- Main Render ---
@@ -566,69 +758,68 @@ async function render(
 
   fs.mkdirSync(outDir, { recursive: true });
 
-  const images: string[] = [];
-  let pageNum = 1;
-  const tempFiles: string[] = [];
+  // Phase 1: Calculate total pages
+  interface PlannedPage {
+    section: PageSection;
+    chunkIndex: number;
+    totalChunks: number;
+    bodyHtml: string;
+  }
+  const planned: PlannedPage[] = [];
 
-  try {
-    for (const section of pages) {
-      if (section.type === 'cover') {
-        const html = resolveImagePaths(
-          buildCoverHtml(section.title, section.bodyHtml, resolvedAuthor, css, pageNum),
-          baseDir,
-        );
-        const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
-        const tmpHtml = path.join(os.tmpdir(), `xhs-cover-${Date.now()}.html`);
-        fs.writeFileSync(tmpHtml, html);
-        tempFiles.push(tmpHtml);
-        await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
-        images.push(imgPath);
-        pageNum++;
-      } else if (section.type === 'ending') {
-        const html = buildEndingHtml(section.tags || [], section.author || resolvedAuthor, css, pageNum);
-        const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-ending.png`);
-        const tmpHtml = path.join(os.tmpdir(), `xhs-ending-${Date.now()}.html`);
-        fs.writeFileSync(tmpHtml, html);
-        tempFiles.push(tmpHtml);
-        await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
-        images.push(imgPath);
-        pageNum++;
-      } else {
-        const rawHtml = resolveImagePaths(
-          buildContentHtml(section.title, section.bodyHtml, css, pageNum),
-          baseDir,
-        );
-
-        // Extract body content for splitting
-        const bodyMatch = rawHtml.match(/<div class="body">([\s\S]*?)<\/div>\s*<div class="page-num">/);
-        const fullBody = bodyMatch ? bodyMatch[1]! : section.bodyHtml;
-        const titleHeight = section.title ? SECTION_TITLE_HEIGHT : 0;
-        const availableHeight =
-          size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT - titleHeight;
-
-        const chunks = estimateContentPages(fullBody, availableHeight);
-
-        for (let i = 0; i < chunks.length; i++) {
-          const chunkHtml = resolveImagePaths(
-            buildContentHtml(i === 0 ? section.title : '', chunks[i]!, css, pageNum),
-            baseDir,
-          );
-          const imgPath = path.join(
-            outDir,
-            `${String(pageNum).padStart(2, '0')}-content-${section.slug}.png`,
-          );
-          const tmpHtml = path.join(os.tmpdir(), `xhs-content-${Date.now()}-${i}.html`);
-          fs.writeFileSync(tmpHtml, chunkHtml);
-          tempFiles.push(tmpHtml);
-          await renderWithChrome(tmpHtml, imgPath, size.width, size.height);
-          images.push(imgPath);
-          pageNum++;
-        }
+  for (const section of pages) {
+    if (section.type === 'cover' || section.type === 'ending') {
+      planned.push({ section, chunkIndex: 0, totalChunks: 1, bodyHtml: section.bodyHtml });
+    } else {
+      const titleHeight = section.title ? SECTION_TITLE_HEIGHT : 0;
+      const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT - titleHeight;
+      const chunks = estimateContentPages(section.bodyHtml, availableHeight);
+      for (let i = 0; i < chunks.length; i++) {
+        planned.push({ section, chunkIndex: i, totalChunks: chunks.length, bodyHtml: chunks[i]! });
       }
     }
-  } finally {
-    for (const f of tempFiles) {
-      try { fs.unlinkSync(f); } catch { /* ignore */ }
+  }
+
+  const totalPages = planned.length;
+
+  // Phase 2: Render with known totalPages
+  const dimensionCss = `body{height:${size.height}px;width:${size.width}px;min-height:${size.height}px;}`;
+  const dims = `height:${size.height}px;width:${size.width}px;min-height:${size.height}px;`;
+  const images: string[] = [];
+
+  for (let idx = 0; idx < planned.length; idx++) {
+    const { section, chunkIndex, bodyHtml } = planned[idx]!;
+    const pageNum = idx + 1;
+    let html: string;
+
+    if (section.type === 'cover') {
+      html = buildCoverHtml(section.title, section.bodyHtml, resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims, size.height);
+      html = resolveImagePaths(html, baseDir);
+      const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
+      await renderWithChrome(html, imgPath, size.width, size.height);
+      images.push(imgPath);
+    } else if (section.type === 'ending') {
+      html = buildEndingHtml(section.tags || [], section.author || resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims);
+      const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-ending.png`);
+      await renderWithChrome(html, imgPath, size.width, size.height);
+      images.push(imgPath);
+    } else {
+      const showTitle = chunkIndex === 0 ? section.title : '';
+      html = buildContentHtml(
+        showTitle,
+        bodyHtml,
+        section.layout,
+        section.rawTokens,
+        css + dimensionCss,
+        pageNum,
+        totalPages,
+        dims,
+      );
+      html = resolveImagePaths(html, baseDir);
+      const suffix = chunkIndex === 0 ? section.slug : `${section.slug}-${chunkIndex + 1}`;
+      const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-content-${suffix}.png`);
+      await renderWithChrome(html, imgPath, size.width, size.height);
+      images.push(imgPath);
     }
   }
 
@@ -637,7 +828,7 @@ async function render(
   const captionPath = path.join(outDir, 'caption.md');
   fs.writeFileSync(captionPath, caption, 'utf-8');
 
-  return { images, captionPath, title, totalPages: pageNum - 1 };
+  return { images, captionPath, title, totalPages };
 }
 
 // --- CLI ---
