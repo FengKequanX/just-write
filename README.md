@@ -20,7 +20,7 @@
 |------|------|
 | **bun** | `npm install -g bun` 或 https://bun.sh |
 | **WeChat API 凭证** | 用于公众号发布（不发布则不需要） |
-| **浏览器** | 用于小红书扫码登录（Chromium） |
+| **Chrome / Edge** | ≥ 112，用于小红书图片渲染（headless 截图） |
 
 ## 配置公众号发布
 
@@ -60,13 +60,7 @@ only_fans_can_comment: 0
 
 ## 配置小红书发布
 
-### 1. 扫码登录
-
-首次发布时，脚本会打开浏览器并显示小红书创作者平台的登录二维码，使用小红书 App 扫码即可。
-
-登录状态通过 Chrome Profile 持久化保存，后续发布无需重复扫码。
-
-### 2. （可选）偏好设置
+### 1. （可选）偏好设置
 
 创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
 
@@ -75,31 +69,30 @@ default_author: 作者名
 default_theme: default
 default_aspect: "3:4"
 default_topic_tags: AI观察,科技,编程
-default_caption_style: 干货型
-dry_run: false
-browser_profile_path: ~/.baoyu-skills/xhs-chrome-profile
 ```
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `default_author` | — | 作者名，显示在封面和结尾页 |
-| `default_theme` | `default` | 主题样式，目前支持：`default` |
+| `default_theme` | `default` | 主题样式，目前支持：`default`（Quiet Observer 暖色编辑风） |
 | `default_aspect` | `"3:4"` | 图片比例，可选：`3:4` / `9:16` / `1:1` / `4:3` |
 | `default_topic_tags` | — | 话题标签，逗号分隔 |
-| `default_caption_style` | `干货型` | 标题风格：`干货型` / `种草型` / `故事型` |
-| `dry_run` | `false` | 仅生成图片不发布到平台 |
-| `browser_profile_path` | 自动 | Chrome Profile 路径（用于登录态持久化） |
 
-### 3. 图片生成说明
+### 2. 图片生成说明
 
-小红书内容以图片卡片形式发布，脚本会自动将 Markdown 文章渲染为：
-- **封面页** — 文章标题 + 副标题 + 作者 + 品牌标记
-- **内容页** — 按 H2 章节分页，溢出按段落自动拆分，支持内嵌图片
-- **结尾页** — 互动引导 + 话题标签 + 作者
+小红书内容以轮播图形式发布，脚本自动将 Markdown 文章渲染为 PNG 图片：
 
-渲染使用 Chrome headless 截图（需 Chrome ≥ 112），发布使用 Playwright 浏览器自动化。
+- **封面页** — 文章标题 + 副标题 + 作者 + 铜色装饰元素
+- **内容页** — 按 H2 章节分页，根据内容自动匹配布局（6 种：标准文字、图片聚焦、数据卡片、引用、列表、代码），溢出按段落自动拆分
+- **结尾页** — 感谢阅读 + 话题标签 + 作者
 
-生成的图片保存在输出目录（`[文章标题]-xhs/`），也可通过 `dry_run: true` 仅预览不发布。
+渲染使用 Chrome/Edge 原生 `--headless=new` 截图（需 ≥ 112），无需 Playwright。
+
+生成的图片和文案保存在输出目录（`[文章标题]-xhs/`）。
+
+### 3. 手动上传
+
+图片生成后，打开 [小红书创作者平台](https://creator.xiaohongshu.com/publish/publish) 手动上传图片，从生成的 `caption.md` 复制标题和文案。
 
 ## 文章目录结构
 
