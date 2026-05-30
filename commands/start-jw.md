@@ -17,11 +17,11 @@ If @$1 is specific (e.g., "写一篇关于 Altman 改口的文章"), you may fas
 | Step | Label | Sub-skill to invoke | Confirmation word |
 |------|-------|-------------------|-------------------|
 | 1 | `[Step 1: 选题讨论]` | `Skill('just-write:brainstorming')` | `确认选题` |
-| 2 | `[Step 2: 标题]` | `Skill('just-write:viral-title')` | `确认标题：X号` |
-| 3a | `[Step 3a: 内容生成]` | — (write directly) | `确认内容` |
-| 3b | `[Step 3b: 润色]` | `Skill('just-write:humanizer-zh')` | `确认润色` |
-| 4 | `[Step 4: 配图与发布确认]` | — (confirm assets) | `确认发布` |
-| 5 | `[Step 5: 发布]` | `Skill('just-write:baoyu-post-to-wechat')` | — |
+| 2 | `[Step 2: 内容生成]` | — (write directly) | `确认内容` |
+| 3 | `[Step 3: 润色]` | `Skill('just-write:humanizer-zh')` | `确认润色` |
+| 4 | `[Step 4: 排版优化]` | `Skill('just-write:baoyu-format-markdown')` | `确认排版：X号` |
+| 5 | `[Step 5: 配图与发布确认]` | — (confirm assets) | `确认发布` |
+| 6 | `[Step 6: 发布]` | `Skill('just-write:baoyu-post-to-wechat')` | — |
 
 ## Hard Rules
 

@@ -97,19 +97,9 @@ dry_run: false
 
 ```
 [文章标题]/
-├── [文章标题].md        # 文章 Markdown 文件
-└── imgs/               # 该文章的所有图片和封面
-```
-
-例如：
-
-```
-AI Agent的未来趋势/
-├── AI Agent的未来趋势.md
-└── imgs/
-    ├── cover.png
-    ├── figure-1.png
-    └── figure-2.png
+├── [文章标题].md              # 润色后的文章
+├── [文章标题]-formatted.md    # 排版优化后的最终版本（用于发布）
+└── imgs/                     # 该文章的所有图片和封面
 ```
 
 ## 使用
@@ -121,30 +111,41 @@ AI Agent的未来趋势/
 或 slash 命令：
 
 ```
-/just-write:just-write 想写什么
+/just-write:start-jw 想写什么
 ```
 
 ## 设计哲学
 
-**AI是拐杖不是腿。** 每一步都等你确认——选题你定，标题你选，内容可反复修正——AI助你落地想法，你才是作者。
+**AI是拐杖不是腿。** 每一步都等你确认——选题你定，内容可反复修正，标题你选——AI助你落地想法，你才是作者。
 
 ## 工作流
 
 ```
-选题 → 标题 → 内容生成与修正 → AI去痕润色 → 配图 → 一键发布
+选题讨论 → 内容生成 → AI去痕润色 → 排版优化(含标题生成) → 配图 → 发布
 ```
 
-当前支持：**微信公众号**、**小红书**。计划支持：抖音。
+每一步都有检查点，确认后才进入下一步：
+
+| 步骤 | 确认词 |
+|------|--------|
+| 选题讨论 | 确认选题 |
+| 内容生成 | 确认内容 |
+| 润色 | 确认润色 |
+| 排版优化 | 确认排版：X号 |
+| 配图与发布 | 确认发布 |
+
+当前支持：**微信公众号**、**小红书**。
 
 ## 内置技能
 
-| 技能 | 上游 |
-|------|------|
-| brainstorming | [obra/superpowers](https://github.com/obra/superpowers) |
-| viral-title | 内置 |
-| humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) |
-| baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) |
-| post-to-xhs | 内置 |
+| 技能 | 上游 | 用途 |
+|------|------|------|
+| brainstorming | 改造自 [obra/superpowers](https://github.com/obra/superpowers) | 选题讨论 |
+| humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) | 去 AI 写作痕迹 |
+| baoyu-format-markdown | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 排版优化 + 标题生成 + CJK 排版 |
+| baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
+| post-to-xhs | 内置 | 小红书发布 |
+| viral-title | 内置 | 标题生成（已被 baoyu-format-markdown 替代，保留备用） |
 
 ## 更新
 

@@ -33,6 +33,15 @@ git clone --depth 1 https://github.com/op7418/Humanizer-zh.git "$TMPDIR" 2>/dev/
 cp "$TMPDIR/SKILL.md" skills/humanizer-zh/
 rm -rf "$TMPDIR"
 
+# baoyu-format-markdown (JimLiu/baoyu-skills subdirectory)
+echo "[baoyu-format-markdown]"
+TMPDIR=$(mktemp -d)
+git clone --depth 1 https://github.com/JimLiu/baoyu-skills.git "$TMPDIR" 2>/dev/null
+cp -r "$TMPDIR/skills/baoyu-format-markdown/SKILL.md" skills/baoyu-format-markdown/
+cp -r "$TMPDIR/skills/baoyu-format-markdown/scripts/" skills/baoyu-format-markdown/scripts/
+cp -r "$TMPDIR/skills/baoyu-format-markdown/references/" skills/baoyu-format-markdown/references/
+rm -rf "$TMPDIR"
+
 # viral-title - no upstream, bundled as-is
 echo "[viral-title] (bundled, no upstream)"
 

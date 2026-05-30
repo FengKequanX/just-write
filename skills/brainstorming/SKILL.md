@@ -53,7 +53,7 @@ description: "内容选题讨论。帮助用户从模糊想法到明确选题：
 
 ## 与 just-write 工作流的衔接
 
-本 skill 是 just-write 工作流的 Step 1。输出检查点并收到用户"确认选题"后，just-write 主流程会推进到 Step 2（标题生成）。
+本 skill 是 just-write 工作流的 Step 1。输出检查点并收到用户"确认选题"后，just-write 主流程会推进到 Step 2（内容生成）。
 
 不要：
 - 调用 writing-plans、frontend-design 等其他 skill

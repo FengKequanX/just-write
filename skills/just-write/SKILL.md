@@ -8,7 +8,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 # 微信公众号内容创作工作室
 
-把你的想法变成可发布的文章。支持全流程：选题讨论 → 标题 → 创作 → 润色 → 配图与发布 → 发布。
+把你的想法变成可发布的文章。支持全流程：选题讨论 → 内容生成 → 润色 → 排版优化(含标题) → 配图与发布 → 发布。
 
 ---
 
@@ -18,31 +18,31 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 1. **MANDATORY 每次回复开头标注当前步骤。** 格式：`[Step N: 步骤名]`。这让跳步对用户可见。每个 Step 的 label：
    - `[Step 1: 选题讨论]`
-   - `[Step 2: 标题]`
-   - `[Step 3a: 内容生成]`
-   - `[Step 3b: 润色]`
-   - `[Step 4: 配图与发布确认]`
-   - `[Step 5: 发布]`
+   - `[Step 2: 内容生成]`
+   - `[Step 3: 润色]`
+   - `[Step 4: 排版优化]`
+   - `[Step 5: 配图与发布确认]`
+   - `[Step 6: 发布]`
 
 2. **MANDATORY 每个 Step 结束后输出检查点块，然后停下来等用户说确认词。** 不能自己判断"差不多就过了"。确认词表：
 
    | 步骤 | 确认词 |
    |------|--------|
    | Step 1 | `确认选题` |
-   | Step 2 | `确认标题：X号` |
-   | Step 3a | `确认内容` |
-   | Step 3b | `确认润色` |
-   | Step 4 | `确认发布` |
+   | Step 2 | `确认内容` |
+   | Step 3 | `确认润色` |
+   | Step 4 | `确认排版：X号` |
+   | Step 5 | `确认发布` |
 
 3. **MANDATORY 每个 Step 调用对应的子 skill，不要自己手动完成。** 调用白名单：
    - Step 1 → `Skill('just-write:brainstorming')`
-   - Step 2 → `Skill('just-write:viral-title')`
-   - Step 3b → `Skill('just-write:humanizer-zh')`
-   - Step 5 → `Skill('just-write:baoyu-post-to-wechat')`
+   - Step 3 → `Skill('just-write:humanizer-zh')`
+   - Step 4 → `Skill('just-write:baoyu-format-markdown')`
+   - Step 6 → `Skill('just-write:baoyu-post-to-wechat')`
 
 4. **MANDATORY 写文章时每个事实性论断同步写入图片占位符。** 数据、引用、新闻事件必须带 `![描述](imgs/xxx.png)`。纯个人观点不需要。写完后再补 = 失败。
 
-5. **MANDATORY "确认内容"后立即输出截图来源清单。** 不能等用户问。格式见 Step 3a。
+5. **MANDATORY "确认内容"后立即输出截图来源清单。** 不能等用户问。格式见 Step 2。
 
 6. **MANDATORY 不重启已完成步骤。** 如果用户在前一轮对话中已经完成了某步，从下一个未完成的步骤继续。
 
@@ -51,8 +51,8 @@ description: Trigger immediately when user wants to write, create, or publish co
 ## 工作流
 
 ```
-用户想法 → 选题讨论 → 爆款标题 → 内容生成(迭代) → 润色 → 配图与发布确认 → 发布
-  Step 1    Step 2     Step 3a           Step 3b   Step 4           Step 5
+用户想法 → 选题讨论 → 内容生成(迭代) → 润色 → 排版优化(含标题) → 配图与发布确认 → 发布
+  Step 1    Step 2     Step 3       Step 4         Step 5          Step 6
 ```
 
 ---
@@ -81,28 +81,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ---
 
-## Step 2: 标题
-
-**必须调用 `Skill('just-write:viral-title')` 生成 3-5 个标题。** 不要自己生成标题。
-
-标题必须包含至少一个热点关键词（具体人名/公司名/模型名/热门事件名）。纯抽象概念或比喻 = 不合格。
-
-**微信禁忌：** 不用"震惊！""刚刚！""必看！""99%的人不知道"。
-
-### 检查点（必须输出）
-
-```
-【标题候选】
-1.「...」（类型）
-2.「...」（类型）
-3.「...」（类型）
-
-确认后回复"确认标题：X号"。
-```
-
----
-
-## Step 3a: 内容生成
+## Step 2: 内容生成
 
 支持多轮修正——用户可以反复提出修改意见，每次修改后重新输出检查点。
 
@@ -152,7 +131,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ```
 【文章内容确认】
-- 标题：...
+- 主题：...
 - 核心观点：...
 - 图片占位符：N 张（列出每个占位符和对应论断）
 - 待确认数据：...
@@ -179,7 +158,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ---
 
-## Step 3b: 润色
+## Step 3: 润色
 
 **前置条件：用户必须已说出"确认内容"。** 未确认前不得执行润色。
 
@@ -205,22 +184,61 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ---
 
-## Step 4: 配图与发布确认
+## Step 4: 排版优化
 
-### 4.1 截图素材
+**前置条件：用户必须已说出"确认润色"。** 未确认前不得执行排版。
 
-截图来源清单已在 Step 3a 输出。用户按清单保存截图到 `imgs/`。检查目录确认文件到齐。
+**必须调用 `Skill('just-write:baoyu-format-markdown')` 进行排版优化。** 不要自己手动排版。
+
+调用 skill 时，自动选择"优化排版"选项，不询问用户选择排版模式。
+
+该 skill 会：
+1. 分析内容结构，识别关键亮点和排版问题
+2. 生成 4-5 个标题候选（基于内容，比写前生成更精准）
+3. 应用格式优化（标题层级、加粗重点、列表化）
+4. 运行 CJK 排版脚本（中英间距、标点修正）
+5. 输出 `{filename}-formatted.md`
+
+### 微信标题硬性规则
+
+标题选择时额外强制执行以下规则：
+
+1. **微信禁忌词**（任何标题候选不得包含）：震惊！、刚刚！、必看！、99%的人不知道、太可怕了、不看后悔一辈子、刚刚曝光
+2. **热点关键词**：标题必须包含至少一个具体人名/公司名/模型名/热门事件名。纯抽象概念或比喻 = 不合格。
+3. **字数限制**：标题最大 ~30 字符（微信信息流截断线）
+
+### 检查点（必须输出）
+
+```
+【排版结果确认】
+- 标题候选：
+  1.「...」（类型）
+  2.「...」（类型）
+  3.「...」（类型）
+- 排版文件：{filename}-formatted.md
+- 排版改动摘要：加粗 N 处 / 新增标题 N 个 / 列表化 N 处
+
+确认后回复"确认排版：X号"。
+```
+
+---
+
+## Step 5: 配图与发布确认
+
+### 5.1 截图素材
+
+截图来源清单已在 Step 2 输出。用户按清单保存截图到 `imgs/`。检查目录确认文件到齐。
 
 如果用户新增了论断需要配图，更新截图清单。
 
-### 4.2 AI 配图
+### 5.2 AI 配图
 
 根据文章主题生成英文 AI 绘图提示词：
 - 风格与文章调性一致
 - 主体突出、构图简洁
 - 格式：`Prompt: [英文] | Negative: [避免元素]`
 
-### 4.3 封面图
+### 5.3 封面图
 
 - 用户有素材 → 直接用
 - 无素材 → 生成封面图提示词（默认 2:3 竖版）
@@ -232,6 +250,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 标题：「...」
 作者：...
 主题/颜色：default / blue
+排版文件：{filename}-formatted.md
 内联图片：N 张
 封面图：[描述]
 
@@ -240,15 +259,17 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ---
 
-## Step 5: 发布
+## Step 6: 发布
 
 用户说"确认发布"后执行。
 
-### 5.1 微信公众号
+### 6.1 微信公众号
 
 **必须调用 `Skill('just-write:baoyu-post-to-wechat')` 发布。**
 
-### 5.2 小红书（可选）
+发布时使用排版后的文件 `{filename}-formatted.md` 作为输入。
+
+### 6.2 小红书（可选）
 
 微信发布后，检查 `.baoyu-skills/post-to-xhs/EXTEND.md` 的 `enabled` 配置：
 - `enabled: true` → 询问用户是否同步发小红书
@@ -276,10 +297,10 @@ if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
 fi
 ```
 
-发布命令：
+发布命令（使用排版后的文件）：
 ```bash
 bun <plugin-dir>/skills/baoyu-post-to-wechat/scripts/wechat-api.ts \
-  "[文章标题]/[文章标题].md" \
+  "[文章标题]/[文章标题]-formatted.md" \
   --theme default \
   --color blue \
   --author "作者名" \
@@ -293,6 +314,16 @@ bun <plugin-dir>/skills/baoyu-post-to-wechat/scripts/wechat-api.ts \
 - `--cover`: 封面图路径
 - `--no-cite`: 保留内联链接（默认转底部引用）
 
+### 排版优化依赖
+
+安装依赖：
+```bash
+SCRIPT_DIR=<plugin-dir>/skills/baoyu-format-markdown/scripts
+if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+  bun install --cwd "$SCRIPT_DIR"
+fi
+```
+
 ### 小红书发布
 
 安装依赖：
@@ -305,7 +336,7 @@ fi
 
 发布命令：
 ```bash
-bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题].md"
+bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md"
 bun <plugin-dir>/skills/post-to-xhs/scripts/xhs-publisher.ts
 ```
 
@@ -317,6 +348,12 @@ default_theme: default
 default_color: blue
 default_publish_method: api
 default_author: 作者名
+```
+
+**baoyu-format-markdown EXTEND.md**（`.baoyu-skills/baoyu-format-markdown/EXTEND.md`）：
+```yaml
+auto_select_title: false
+auto_select_summary: false
 ```
 
 **post-to-xhs EXTEND.md**（`.baoyu-skills/post-to-xhs/EXTEND.md`，可选）：
