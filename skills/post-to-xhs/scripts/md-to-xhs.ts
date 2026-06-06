@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
 import { marked, type Token } from 'marked';
 
@@ -20,6 +20,7 @@ interface PageSection {
   layout: ContentLayout;
   slug: string;
   coverImage?: string;
+  coverAspectRatio?: string;
   tags?: string[];
   author?: string;
 }
@@ -51,8 +52,11 @@ const CONTENT_BOTTOM_PAD = 104;
 const PAGE_NUM_HEIGHT = 0;
 const CHARS_PER_LINE = 27;
 const LINE_HEIGHT_PX = 62;
-const IMG_EST_HEIGHT = 455;
+const IMG_EST_HEIGHT = 525;
+const IMG_MAX_RENDER_HEIGHT = 455;
+const IMG_VERTICAL_SPACE = 62;
 const BLOCK_PADDING = 26;
+const imageSizeCache = new Map<string, { width: number; height: number } | null>();
 
 // --- Chrome Discovery ---
 
@@ -219,6 +223,112 @@ function resolveCoverImage(fm: Frontmatter, baseDir: string): string {
   return '';
 }
 
+function resolveLocalImagePath(src: string, baseDir: string): string | null {
+  if (/^https?:|^data:/i.test(src)) return null;
+  try {
+    if (/^file:/i.test(src)) return fileURLToPath(src);
+  } catch {
+    return null;
+  }
+  return path.resolve(baseDir, src);
+}
+
+function readImageSize(filePath: string): { width: number; height: number } | null {
+  if (imageSizeCache.has(filePath)) return imageSizeCache.get(filePath)!;
+
+  let size: { width: number; height: number } | null = null;
+  try {
+    const buffer = fs.readFileSync(filePath);
+
+    if (
+      buffer.length >= 24 &&
+      buffer[0] === 0x89 &&
+      buffer.toString('ascii', 1, 4) === 'PNG'
+    ) {
+      size = { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+    } else if (
+      buffer.length >= 12 &&
+      buffer.toString('ascii', 0, 4) === 'RIFF' &&
+      buffer.toString('ascii', 8, 12) === 'WEBP'
+    ) {
+      size = readWebpSize(buffer);
+    } else if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+      size = readJpegSize(buffer);
+    }
+  } catch {
+    size = null;
+  }
+
+  imageSizeCache.set(filePath, size);
+  return size;
+}
+
+function readJpegSize(buffer: Buffer): { width: number; height: number } | null {
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset++;
+      continue;
+    }
+
+    const marker = buffer[offset + 1]!;
+    const length = buffer.readUInt16BE(offset + 2);
+    if (length < 2) return null;
+
+    if (
+      marker === 0xc0 || marker === 0xc1 || marker === 0xc2 ||
+      marker === 0xc3 || marker === 0xc5 || marker === 0xc6 ||
+      marker === 0xc7 || marker === 0xc9 || marker === 0xca ||
+      marker === 0xcb || marker === 0xcd || marker === 0xce ||
+      marker === 0xcf
+    ) {
+      return {
+        height: buffer.readUInt16BE(offset + 5),
+        width: buffer.readUInt16BE(offset + 7),
+      };
+    }
+
+    offset += 2 + length;
+  }
+  return null;
+}
+
+function readWebpSize(buffer: Buffer): { width: number; height: number } | null {
+  const chunk = buffer.toString('ascii', 12, 16);
+
+  if (chunk === 'VP8X' && buffer.length >= 30) {
+    const width = 1 + buffer.readUIntLE(24, 3);
+    const height = 1 + buffer.readUIntLE(27, 3);
+    return { width, height };
+  }
+
+  if (chunk === 'VP8L' && buffer.length >= 25 && buffer[20] === 0x2f) {
+    const bits = buffer.readUInt32LE(21);
+    const width = 1 + (bits & 0x3fff);
+    const height = 1 + ((bits >> 14) & 0x3fff);
+    return { width, height };
+  }
+
+  if (chunk === 'VP8 ') {
+    const start = buffer.indexOf(Buffer.from([0x9d, 0x01, 0x2a]), 20);
+    if (start > 0 && start + 7 < buffer.length) {
+      const width = buffer.readUInt16LE(start + 3) & 0x3fff;
+      const height = buffer.readUInt16LE(start + 5) & 0x3fff;
+      return { width, height };
+    }
+  }
+
+  return null;
+}
+
+function coverImageAspectRatio(src: string, baseDir: string): string {
+  const filePath = resolveLocalImagePath(src, baseDir);
+  const size = filePath && fs.existsSync(filePath) ? readImageSize(filePath) : null;
+  if (!size || size.width <= 0 || size.height <= 0) return '4 / 3';
+
+  return `${size.width} / ${size.height}`;
+}
+
 // --- Content Analysis ---
 
 function analyzeContent(tokens: Token[]): ContentLayout {
@@ -352,6 +462,8 @@ function buildPageSections(
   }
   if (!mainTitle) mainTitle = '未命名文章';
 
+  const coverImage = resolveCoverImage(fm, baseDir);
+
   pages.push({
     type: 'cover',
     title: mainTitle,
@@ -359,7 +471,8 @@ function buildPageSections(
     rawTokens: [],
     layout: 'prose',
     slug: 'cover',
-    coverImage: resolveCoverImage(fm, baseDir),
+    coverImage,
+    coverAspectRatio: coverImage ? coverImageAspectRatio(coverImage, baseDir) : '4 / 3',
   });
 
   const contentHtmlParts: string[] = [];
@@ -431,6 +544,7 @@ function pageNumHtml(current: number, total: number): string {
 function buildCoverHtml(
   title: string,
   coverImage: string,
+  coverAspectRatio: string,
   author: string,
   css: string,
   pageNum: number,
@@ -443,7 +557,7 @@ function buildCoverHtml(
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="cover" style="${dims}">
   <div class="cover-content">
-    ${coverImage ? `<div class="cover-image"><img src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
+    ${coverImage ? `<div class="cover-image" style="--cover-image-ratio:${escapeHtml(coverAspectRatio)}"><img src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
     <div class="title-area">
       <div class="title">${escapeHtml(title)}</div>
       <div class="divider"></div>
@@ -595,8 +709,27 @@ function buildEndingHtml(
 
 // --- Heuristic Content Splitting ---
 
-function estimateHtmlHeight(html: string): number {
-  const imgCount = (html.match(/<img\s/g) || []).length;
+function estimateImageHeight(html: string, baseDir: string, contentWidth: number): number {
+  const srcMatches = [...html.matchAll(/<img\s[^>]*src=["']([^"']+)["']/gi)];
+  if (srcMatches.length === 0) return 0;
+
+  return srcMatches.reduce((total, match) => {
+    const src = match[1] || '';
+    const filePath = resolveLocalImagePath(src, baseDir);
+    const size = filePath && fs.existsSync(filePath) ? readImageSize(filePath) : null;
+    if (!size || size.width <= 0 || size.height <= 0) return total + IMG_EST_HEIGHT;
+
+    const renderHeight = Math.min(
+      IMG_MAX_RENDER_HEIGHT,
+      Math.round((contentWidth * size.height) / size.width),
+    );
+    return total + renderHeight + IMG_VERTICAL_SPACE;
+  }, 0);
+}
+
+function estimateHtmlHeight(html: string, baseDir: string, contentWidth: number): number {
+  const liCount = (html.match(/<li\b/g) || []).length;
+  const headingCount = (html.match(/<h[1-6]\b/g) || []).length;
   const blockCount =
     (html.match(/<\/p>/g) || []).length +
     (html.match(/<\/h[1-6]>/g) || []).length +
@@ -610,11 +743,13 @@ function estimateHtmlHeight(html: string): number {
   const charCount = text.length;
   const textLines = Math.ceil(charCount / CHARS_PER_LINE);
   const textHeight = textLines * LINE_HEIGHT_PX;
-  const imgHeight = imgCount * IMG_EST_HEIGHT;
+  const imgHeight = estimateImageHeight(html, baseDir, contentWidth);
   const blockPadding = blockCount > 1 ? (blockCount - 1) * BLOCK_PADDING : 0;
+  const listPadding = liCount * 18;
+  const headingPadding = headingCount * 18;
   const preExtra = preCount * 48;
 
-  return textHeight + imgHeight + blockPadding + preExtra;
+  return textHeight + imgHeight + blockPadding + listPadding + headingPadding + preExtra;
 }
 
 function splitHtmlAtBlockBoundaries(html: string): string[] {
@@ -629,7 +764,20 @@ function splitHtmlAtBlockBoundaries(html: string): string[] {
   if (lastIndex < html.length) {
     parts.push(html.slice(lastIndex));
   }
-  return parts.filter((p) => p.trim().length > 0);
+  return parts
+    .filter((p) => p.trim().length > 0)
+    .flatMap(splitListBlock);
+}
+
+function splitListBlock(html: string): string[] {
+  const match = html.match(/^\s*<(ul|ol)([^>]*)>([\s\S]*)<\/\1>\s*$/i);
+  if (!match) return [html];
+
+  const [, tag, attrs = '', inner = ''] = match;
+  const items = inner.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi);
+  if (!items || items.length <= 1) return [html];
+
+  return items.map((item) => `<${tag}${attrs}>${item}</${tag}>`);
 }
 
 function keepHeadingsWithFollowingBlocks(blocks: string[]): string[] {
@@ -650,19 +798,21 @@ function keepHeadingsWithFollowingBlocks(blocks: string[]): string[] {
 function rebalanceLastPage(
   pages: string[],
   minHeight: number,
+  baseDir: string,
+  contentWidth: number,
 ): string[] {
   if (pages.length < 2) return pages;
 
   let last = pages[pages.length - 1]!;
   let previous = pages[pages.length - 2]!;
 
-  while (estimateHtmlHeight(last) < minHeight) {
+  while (estimateHtmlHeight(last, baseDir, contentWidth) < minHeight) {
     const previousBlocks = keepHeadingsWithFollowingBlocks(splitHtmlAtBlockBoundaries(previous));
     if (previousBlocks.length <= 1) break;
 
     const moved = previousBlocks.pop()!;
     const nextPrevious = previousBlocks.join('');
-    if (estimateHtmlHeight(nextPrevious) < minHeight) break;
+    if (estimateHtmlHeight(nextPrevious, baseDir, contentWidth) < minHeight) break;
 
     previous = nextPrevious;
     last = moved + last;
@@ -673,8 +823,13 @@ function rebalanceLastPage(
   return pages;
 }
 
-function estimateContentPages(bodyHtml: string, availableHeight: number): string[] {
-  const totalHeight = estimateHtmlHeight(bodyHtml);
+function estimateContentPages(
+  bodyHtml: string,
+  availableHeight: number,
+  baseDir: string,
+  contentWidth: number,
+): string[] {
+  const totalHeight = estimateHtmlHeight(bodyHtml, baseDir, contentWidth);
   const preferredMaxHeight = availableHeight * 0.9;
   const preferredMinHeight = availableHeight * 0.7;
   const hardMaxHeight = availableHeight * 0.98;
@@ -689,7 +844,7 @@ function estimateContentPages(bodyHtml: string, availableHeight: number): string
   let currentHeight = 0;
 
   for (const block of blocks) {
-    const blockHeight = estimateHtmlHeight(block);
+    const blockHeight = estimateHtmlHeight(block, baseDir, contentWidth);
 
     if (currentPage.trim() && currentHeight + blockHeight > preferredMaxHeight) {
       if (currentHeight < preferredMinHeight && currentHeight + blockHeight <= hardMaxHeight) {
@@ -709,14 +864,14 @@ function estimateContentPages(bodyHtml: string, availableHeight: number): string
 
   if (currentPage.trim()) pages.push(currentPage);
 
-  if (pages.length > 1 && estimateHtmlHeight(pages[pages.length - 1]!) < preferredMinHeight) {
+  if (pages.length > 1 && estimateHtmlHeight(pages[pages.length - 1]!, baseDir, contentWidth) < preferredMinHeight) {
     const last = pages.pop()!;
     const previous = pages.pop()!;
-    if (estimateHtmlHeight(previous + last) <= hardMaxHeight) {
+    if (estimateHtmlHeight(previous + last, baseDir, contentWidth) <= hardMaxHeight) {
       pages.push(previous + last);
     } else {
       pages.push(previous, last);
-      rebalanceLastPage(pages, preferredMinHeight);
+      rebalanceLastPage(pages, preferredMinHeight, baseDir, contentWidth);
     }
   }
 
@@ -809,6 +964,7 @@ async function render(
   const sections = splitByHeadings(tokens);
   const pages = buildPageSections(sections, fm, resolvedAuthor, topicTags, baseDir);
   const css = loadCss(theme);
+  const contentWidth = size.width - 164;
 
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -826,7 +982,7 @@ async function render(
       planned.push({ section, chunkIndex: 0, totalChunks: 1, bodyHtml: section.bodyHtml });
     } else {
       const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT;
-      const chunks = estimateContentPages(section.bodyHtml, availableHeight);
+      const chunks = estimateContentPages(section.bodyHtml, availableHeight, baseDir, contentWidth);
       for (let i = 0; i < chunks.length; i++) {
         planned.push({ section, chunkIndex: i, totalChunks: chunks.length, bodyHtml: chunks[i]! });
       }
@@ -846,7 +1002,17 @@ async function render(
     let html: string;
 
     if (section.type === 'cover') {
-      html = buildCoverHtml(section.title, section.coverImage || '', resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims, size.height);
+      html = buildCoverHtml(
+        section.title,
+        section.coverImage || '',
+        section.coverAspectRatio || '4 / 3',
+        resolvedAuthor,
+        css + dimensionCss,
+        pageNum,
+        totalPages,
+        dims,
+        size.height,
+      );
       html = resolveImagePaths(html, baseDir);
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
       await renderWithChrome(html, imgPath, size.width, size.height);

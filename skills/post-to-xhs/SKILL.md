@@ -47,7 +47,7 @@ The renderer keeps the article in reading order and packs content by visual heig
 
 | Page | Design |
 |------|--------|
-| Cover | Uses `coverImage` from frontmatter, then title and author. No summary text is rendered on the cover. |
+| Cover | Uses `coverImage` from frontmatter, then title and author. The cover image keeps its real aspect ratio and is never cropped; 4:3 is recommended for stronger Xiaohongshu first-screen presence. No summary text is rendered on the cover. |
 | Content | Clean editorial style: warm background, serif body text, subtle accent marks, highlighted emphasis, full-width inline images, and no decorative page numbers. H2 headings stay inline with the prose. Pages target roughly 70%-90% visual occupancy, with larger mobile-friendly typography. |
 | Ending | CTA, hashtags, and author. |
 
@@ -119,7 +119,7 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 
 **Rendering rules**:
 - Frontmatter title → Cover page title
-- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`
+- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`; rendered complete without cropping
 - Frontmatter description/summary → Caption text only, not cover text
 - H2 headings → Inline content headings, not forced page breaks
 - Content overflow → Auto-split into multiple pages by visual height
