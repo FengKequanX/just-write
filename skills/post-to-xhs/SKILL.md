@@ -4,7 +4,7 @@ description: >
   将 Markdown 文章渲染为小红书风格轮播图 PNG。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
   "post to xhs"时使用。
-version: 0.3.0
+version: 1.0.1
 metadata:
   openclaw:
     homepage: https://github.com/FengKequanX/just-write#post-to-xhs
@@ -41,18 +41,15 @@ Uses Chrome/Edge native `--headless=new --screenshot` for reliable cross-platfor
 
 If Chrome/Edge is not found, the script errors with install instructions. Set `CHROME_PATH` to override.
 
-## Content-Aware Layout
+## Mobile-First Carousel Layout
 
-The renderer analyzes each content section and picks the best layout:
+The renderer keeps the article in reading order and packs content by visual height instead of forcing every H2 section onto a separate page.
 
-| Layout | Trigger | Design |
-|--------|---------|--------|
-| `prose` | Default | White background, blue accent title, standard typography |
-| `image-focus` | Image + short text | Large image with rounded corners + shadow, text as caption |
-| `stats` | Bold numbers/percentages | Blue gradient stat cards with large values |
-| `pull-quote` | Blockquote as main content | Centered large quote with decorative quotation mark |
-| `list-highlight` | `**term**: desc` patterns | Blue sidebar highlight items |
-| `code` | Code blocks | Dark background page, syntax-highlighted code |
+| Page | Design |
+|------|--------|
+| Cover | Uses `coverImage` from frontmatter, then title and author. No summary text is rendered on the cover. |
+| Content | Clean editorial style: warm background, serif body text, subtle accent marks, highlighted emphasis, full-width inline images, and no decorative page numbers. H2 headings stay inline with the prose. Pages target roughly 70%-90% visual occupancy, with larger mobile-friendly typography. |
+| Ending | CTA, hashtags, and author. |
 
 ## Preferences (EXTEND.md)
 
@@ -122,9 +119,10 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 
 **Rendering rules**:
 - Frontmatter title → Cover page title
-- Frontmatter description → Cover page subtitle
-- H2 sections → Content pages with content-aware layouts
-- Content overflow → Auto-split into multiple pages by paragraph
+- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`
+- Frontmatter description/summary → Caption text only, not cover text
+- H2 headings → Inline content headings, not forced page breaks
+- Content overflow → Auto-split into multiple pages by visual height
 - Inline images → Embedded and rendered
 - Ending page → CTA + hashtags + author
 
@@ -149,10 +147,10 @@ Input: [markdown-file]
 Theme: [theme] · Aspect: [ratio]
 
 Images: [N] total
-- 01-cover.png ✓ Cover (dark gradient)
-- 02-content-[slug].png ✓ Content ([layout-type])
+- 01-cover.png ✓ Cover (cover image + title + author)
+- 02-content-[slug].png ✓ Content
 - ...
-- NN-ending.png ✓ Ending (dark gradient)
+- NN-ending.png ✓ Ending
 
 Caption: [output-dir]/caption.md
 • Title: [title]

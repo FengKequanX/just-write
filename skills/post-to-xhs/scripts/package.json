@@ -1,6 +1,6 @@
 {
   "name": "post-to-xhs",
-  "version": "0.2.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "render": "bun md-to-xhs.ts"

@@ -19,6 +19,7 @@ interface PageSection {
   rawTokens: Token[];
   layout: ContentLayout;
   slug: string;
+  coverImage?: string;
   tags?: string[];
   author?: string;
 }
@@ -45,14 +46,13 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 };
 
 const DEFAULT_ASPECT = '3:4';
-const CONTENT_TOP_PAD = 56;
-const CONTENT_BOTTOM_PAD = 96;
-const PAGE_NUM_HEIGHT = 40;
-const SECTION_TITLE_HEIGHT = 110;
-const CHARS_PER_LINE = 36;
-const LINE_HEIGHT_PX = 48;
-const IMG_EST_HEIGHT = 200;
-const BLOCK_PADDING = 12;
+const CONTENT_TOP_PAD = 78;
+const CONTENT_BOTTOM_PAD = 104;
+const PAGE_NUM_HEIGHT = 0;
+const CHARS_PER_LINE = 27;
+const LINE_HEIGHT_PX = 62;
+const IMG_EST_HEIGHT = 455;
+const BLOCK_PADDING = 26;
 
 // --- Chrome Discovery ---
 
@@ -201,6 +201,24 @@ function resolveImagePaths(html: string, baseDir: string): string {
   );
 }
 
+function resolveCoverImage(fm: Frontmatter, baseDir: string): string {
+  const candidates = [
+    fm.coverImage,
+    fm.cover,
+    fm.image,
+    'cover.png',
+    path.join('imgs', 'cover.png'),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    if (/^(https?:|data:|file:)/.test(candidate)) return candidate;
+    const absolute = path.resolve(baseDir, candidate);
+    if (fs.existsSync(absolute)) return pathToFileURL(absolute).href;
+  }
+
+  return '';
+}
+
 // --- Content Analysis ---
 
 function analyzeContent(tokens: Token[]): ContentLayout {
@@ -323,76 +341,50 @@ function buildPageSections(
   fm: Frontmatter,
   author: string,
   topicTags: string,
+  baseDir: string,
 ): PageSection[] {
   const pages: PageSection[] = [];
   let mainTitle = fm.title || '';
-  let subtitle = fm.description || '';
 
   const h1 = sections.find((s) => s.heading?.depth === 1);
   if (h1) {
     mainTitle = mainTitle || h1.heading!.text;
-    const firstP = h1.tokens.find((t) => t.type === 'paragraph');
-    if (firstP && 'text' in firstP && !subtitle) {
-      subtitle = firstP.text.slice(0, 100);
-    }
   }
   if (!mainTitle) mainTitle = '未命名文章';
 
   pages.push({
     type: 'cover',
     title: mainTitle,
-    bodyHtml: subtitle,
+    bodyHtml: '',
     rawTokens: [],
     layout: 'prose',
     slug: 'cover',
+    coverImage: resolveCoverImage(fm, baseDir),
   });
 
-  for (const section of sections) {
-    const sectionTokens = section.tokens;
-    const layout = analyzeContent(sectionTokens);
-    const html = marked.parse(sectionTokens.map((t) => t.raw).join('')) as string;
+  const contentHtmlParts: string[] = [];
+  const contentTokens: Token[] = [];
 
-    if (section.heading?.depth === 1) {
-      const bodyTokens = sectionTokens.filter((t) => {
-        if (t.type === 'paragraph' && 'text' in t && t.text.slice(0, 100) === subtitle) {
-          return false;
-        }
-        return true;
-      });
-      if (bodyTokens.length > 0) {
-        const bodyHtml = marked.parse(bodyTokens.map((t) => t.raw).join('')) as string;
-        if (bodyHtml.trim()) {
-          pages.push({
-            type: 'content',
-            title: '',
-            bodyHtml,
-            rawTokens: bodyTokens,
-            layout: analyzeContent(bodyTokens),
-            slug: 'intro',
-          });
-        }
-      }
-    } else if (section.heading?.depth === 2) {
-      pages.push({
-        type: 'content',
-        title: section.heading.text,
-        bodyHtml: html,
-        rawTokens: sectionTokens,
-        layout,
-        slug: slugify(section.heading.text),
-      });
-    } else if (!section.heading && sectionTokens.length > 0) {
-      if (html.trim()) {
-        pages.push({
-          type: 'content',
-          title: '',
-          bodyHtml: html,
-          rawTokens: sectionTokens,
-          layout,
-          slug: 'intro',
-        });
-      }
+  for (const section of sections) {
+    if (section.heading?.depth === 2) {
+      contentHtmlParts.push(`<h2 class="inline-section-title">${escapeHtml(section.heading.text)}</h2>`);
     }
+
+    const sectionHtml = marked.parse(section.tokens.map((t) => t.raw).join('')) as string;
+    if (sectionHtml.trim()) contentHtmlParts.push(sectionHtml);
+    contentTokens.push(...section.tokens);
+  }
+
+  const contentHtml = contentHtmlParts.join('\n');
+  if (contentHtml.trim()) {
+    pages.push({
+      type: 'content',
+      title: '',
+      bodyHtml: contentHtml,
+      rawTokens: contentTokens,
+      layout: 'prose',
+      slug: 'content',
+    });
   }
 
   const tags = topicTags
@@ -431,12 +423,14 @@ function loadCss(theme: string): string {
 }
 
 function pageNumHtml(current: number, total: number): string {
-  return `<div class="page-num"><span class="page-current">${current}</span> / <span class="page-total">${total}</span></div>`;
+  void current;
+  void total;
+  return '';
 }
 
 function buildCoverHtml(
   title: string,
-  subtitle: string,
+  coverImage: string,
   author: string,
   css: string,
   pageNum: number,
@@ -448,17 +442,14 @@ function buildCoverHtml(
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="cover" style="${dims}">
-  <div style="flex:1"></div>
   <div class="cover-content">
+    ${coverImage ? `<div class="cover-image"><img src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
     <div class="title-area">
-      <div class="brand">${escapeHtml(author)}</div>
       <div class="title">${escapeHtml(title)}</div>
       <div class="divider"></div>
-      ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
     </div>
     <div class="author">${escapeHtml(author)}</div>
   </div>
-  <div style="flex:1"></div>
   ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
@@ -641,21 +632,72 @@ function splitHtmlAtBlockBoundaries(html: string): string[] {
   return parts.filter((p) => p.trim().length > 0);
 }
 
+function keepHeadingsWithFollowingBlocks(blocks: string[]): string[] {
+  const merged: string[] = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    if (/^\s*<h[2-4]\b/i.test(block) && blocks[i + 1]) {
+      merged.push(block + blocks[++i]!);
+    } else {
+      merged.push(block);
+    }
+  }
+
+  return merged;
+}
+
+function rebalanceLastPage(
+  pages: string[],
+  minHeight: number,
+): string[] {
+  if (pages.length < 2) return pages;
+
+  let last = pages[pages.length - 1]!;
+  let previous = pages[pages.length - 2]!;
+
+  while (estimateHtmlHeight(last) < minHeight) {
+    const previousBlocks = keepHeadingsWithFollowingBlocks(splitHtmlAtBlockBoundaries(previous));
+    if (previousBlocks.length <= 1) break;
+
+    const moved = previousBlocks.pop()!;
+    const nextPrevious = previousBlocks.join('');
+    if (estimateHtmlHeight(nextPrevious) < minHeight) break;
+
+    previous = nextPrevious;
+    last = moved + last;
+  }
+
+  pages[pages.length - 2] = previous;
+  pages[pages.length - 1] = last;
+  return pages;
+}
+
 function estimateContentPages(bodyHtml: string, availableHeight: number): string[] {
   const totalHeight = estimateHtmlHeight(bodyHtml);
-  if (totalHeight <= availableHeight) return [bodyHtml];
+  const preferredMaxHeight = availableHeight * 0.9;
+  const preferredMinHeight = availableHeight * 0.7;
+  const hardMaxHeight = availableHeight * 0.98;
 
-  const blocks = splitHtmlAtBlockBoundaries(bodyHtml);
+  if (totalHeight <= hardMaxHeight) return [bodyHtml];
+
+  const blocks = keepHeadingsWithFollowingBlocks(splitHtmlAtBlockBoundaries(bodyHtml));
   if (blocks.length === 0) return [bodyHtml];
 
   const pages: string[] = [];
   let currentPage = '';
   let currentHeight = 0;
-  const safeHeight = availableHeight;
 
   for (const block of blocks) {
     const blockHeight = estimateHtmlHeight(block);
-    if (currentHeight + blockHeight > safeHeight && currentPage.trim()) {
+
+    if (currentPage.trim() && currentHeight + blockHeight > preferredMaxHeight) {
+      if (currentHeight < preferredMinHeight && currentHeight + blockHeight <= hardMaxHeight) {
+        currentPage += block;
+        currentHeight += blockHeight;
+        continue;
+      }
+
       pages.push(currentPage);
       currentPage = block;
       currentHeight = blockHeight;
@@ -666,6 +708,18 @@ function estimateContentPages(bodyHtml: string, availableHeight: number): string
   }
 
   if (currentPage.trim()) pages.push(currentPage);
+
+  if (pages.length > 1 && estimateHtmlHeight(pages[pages.length - 1]!) < preferredMinHeight) {
+    const last = pages.pop()!;
+    const previous = pages.pop()!;
+    if (estimateHtmlHeight(previous + last) <= hardMaxHeight) {
+      pages.push(previous + last);
+    } else {
+      pages.push(previous, last);
+      rebalanceLastPage(pages, preferredMinHeight);
+    }
+  }
+
   return pages.length > 0 ? pages : [bodyHtml];
 }
 
@@ -753,7 +807,7 @@ async function render(
 
   const tokens = marked.lexer(body);
   const sections = splitByHeadings(tokens);
-  const pages = buildPageSections(sections, fm, resolvedAuthor, topicTags);
+  const pages = buildPageSections(sections, fm, resolvedAuthor, topicTags, baseDir);
   const css = loadCss(theme);
 
   fs.mkdirSync(outDir, { recursive: true });
@@ -771,8 +825,7 @@ async function render(
     if (section.type === 'cover' || section.type === 'ending') {
       planned.push({ section, chunkIndex: 0, totalChunks: 1, bodyHtml: section.bodyHtml });
     } else {
-      const titleHeight = section.title ? SECTION_TITLE_HEIGHT : 0;
-      const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT - titleHeight;
+      const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT;
       const chunks = estimateContentPages(section.bodyHtml, availableHeight);
       for (let i = 0; i < chunks.length; i++) {
         planned.push({ section, chunkIndex: i, totalChunks: chunks.length, bodyHtml: chunks[i]! });
@@ -793,7 +846,7 @@ async function render(
     let html: string;
 
     if (section.type === 'cover') {
-      html = buildCoverHtml(section.title, section.bodyHtml, resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims, size.height);
+      html = buildCoverHtml(section.title, section.coverImage || '', resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims, size.height);
       html = resolveImagePaths(html, baseDir);
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
       await renderWithChrome(html, imgPath, size.width, size.height);
