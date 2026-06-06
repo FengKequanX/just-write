@@ -40,57 +40,50 @@ body {
 /* ==================== Cover Page ==================== */
 
 .cover {
-  background:
-    linear-gradient(180deg, rgba(212, 86, 63, 0.05) 0%, transparent 35%),
-    var(--bg);
-  padding: 72px 72px 96px;
+  background: var(--bg);
+  padding: 0 72px 96px;
   position: relative;
   overflow: hidden;
 }
 
-/* Top-left corner bracket — editorial framing */
 .cover::before {
   content: '';
   position: absolute;
-  top: 48px;
-  left: 48px;
-  width: 52px;
-  height: 52px;
-  border-top: 2px solid var(--accent);
-  border-left: 2px solid var(--accent);
-  opacity: 0.35;
+  top: 108px;
+  left: 72px;
+  width: 132px;
+  height: 28px;
+  background: rgba(23, 23, 27, 0.08);
 }
 
-/* Bottom-right accent line */
 .cover::after {
   content: '';
   position: absolute;
-  bottom: 64px;
-  right: 64px;
-  width: 80px;
-  height: 2px;
-  background: var(--accent);
-  opacity: 0.25;
+  left: 72px;
+  right: 72px;
+  bottom: 86px;
+  height: 4px;
+  background: rgba(23, 23, 27, 0.32);
 }
 
-/* Wrapper for vertical centering via flex:1 spacers on body */
 .cover .cover-content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 30px;
+  justify-content: flex-start;
+  gap: 0;
   height: 100%;
   z-index: 1;
 }
 
 .cover .cover-image {
-  width: 100%;
+  width: calc(100% + 144px);
   aspect-ratio: var(--cover-image-ratio, 4 / 3);
-  border-radius: 8px;
+  margin: 178px -72px 56px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(23, 23, 27, 0.08);
-  box-shadow: 0 16px 48px rgba(23, 23, 27, 0.16);
-  background: #111;
+  border: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .cover .cover-image img {
@@ -128,21 +121,18 @@ body {
 }
 
 .cover .title {
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  font-size: 52px;
+  font-family: var(--font-body);
+  font-size: 64px;
   font-weight: 700;
-  line-height: 1.22;
-  margin-bottom: 30px;
-  max-width: 930px;
+  line-height: 1.16;
+  margin-bottom: 54px;
+  max-width: 940px;
   color: var(--text);
   letter-spacing: 0;
 }
 
 .cover .divider {
-  width: 72px;
-  height: 4px;
-  background: var(--accent);
-  margin: 0;
+  display: none;
 }
 
 .cover .subtitle {
@@ -155,21 +145,23 @@ body {
 
 .cover .author {
   font-family: var(--font-display);
-  font-size: 32px;
-  color: var(--text-sec);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text);
   z-index: 1;
   letter-spacing: 2px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 18px;
 }
 
 .cover .author::before {
   content: '';
   display: inline-block;
-  width: 20px;
-  height: 1px;
-  background: var(--text-light);
+  width: 6px;
+  height: 44px;
+  border-radius: 3px;
+  background: var(--text);
 }
 
 /* ==================== Content Page — Base ==================== */
