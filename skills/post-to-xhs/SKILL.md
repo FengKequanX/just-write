@@ -4,7 +4,7 @@ description: >
   将 Markdown 文章渲染为小红书风格轮播图 PNG。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
   "post to xhs"时使用。
-version: 1.0.2
+version: 1.0.3
 metadata:
   openclaw:
     homepage: https://github.com/FengKequanX/just-write#post-to-xhs
@@ -48,7 +48,7 @@ The renderer keeps the article in reading order and packs content by visual heig
 | Page | Design |
 |------|--------|
 | Cover | Uses `coverImage` from frontmatter, then title and author. The cover image keeps its real aspect ratio and is never cropped; 4:3 is recommended for stronger Xiaohongshu first-screen presence. No summary text is rendered on the cover. |
-| Content | Clean editorial style: warm background, serif body text, subtle accent marks, highlighted emphasis, full-width inline images, and no decorative page numbers. H2 headings stay inline with the prose. Pages target roughly 70%-90% visual occupancy, with larger mobile-friendly typography. |
+| Content | Clean editorial style: warm background, serif body text, subtle accent marks, highlighted emphasis, fixed-width image frames, and no decorative page numbers. H2/H3 headings stay inline with the prose. Pages flow in article order, use browser-measured pagination, mobile-friendly typography, compact line spacing, and fixed narrow gaps around mixed Chinese/Latin text. |
 | Ending | CTA, hashtags, and author. |
 
 ## Preferences (EXTEND.md)
@@ -122,8 +122,8 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 - Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`; placed in a 4:3 visual frame, with the foreground image rendered complete without cropping and a soft same-image background for non-4:3 covers
 - Frontmatter description/summary → Caption text only, not cover text
 - H2 headings → Inline content headings, not forced page breaks
-- Content overflow → Auto-split sequentially using browser-measured layout height; prose paragraphs can continue across pages like article text, while images stay as whole blocks at the content width and move to the next page when they do not fit at their render size; the final page keeps the remaining content naturally
-- Inline images → Embedded and rendered
+- Content overflow → Auto-split sequentially using browser-measured layout height; prose paragraphs can continue across pages like article text, while images stay as whole blocks and move to the next page when they do not fit at their rendered frame size; the final page keeps the remaining content naturally
+- Inline images → Rendered inside unified-width white image frames; the image itself is shown complete without cropping
 - Ending page → CTA + hashtags + author
 
 **Output structure**:
@@ -172,8 +172,8 @@ When used as part of the just-write plugin, this skill triggers after WeChat pub
 | Chrome/Edge not found | Install Google Chrome or Microsoft Edge, or set `CHROME_PATH` env var |
 | Rendering fails | Check Chrome version ≥ 112 (required for `--headless=new`) |
 | Chinese path errors | Script uses ASCII temp path internally; should work for all paths |
-| Content overflow | Auto-split by heuristic; check output images and adjust content length |
-| Title too long | Auto-truncated to 20 chars in caption |
+| Content overflow | Auto-split by browser-measured layout; check whether unusually tall source images need shorter surrounding text |
+| Title too long | Full title is written to `caption.md`; adjust manually only if the target platform rejects the length |
 
 ## Prerequisites
 

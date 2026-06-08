@@ -47,9 +47,10 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 };
 
 const DEFAULT_ASPECT = '3:4';
-const CONTENT_TOP_PAD = 78;
-const CONTENT_BOTTOM_PAD = 104;
+const CONTENT_TOP_PAD = 70;
+const CONTENT_BOTTOM_PAD = 88;
 const PAGE_NUM_HEIGHT = 0;
+const CONTENT_SIDE_PAD = 70;
 const imageSizeCache = new Map<string, { width: number; height: number } | null>();
 
 // --- Chrome Discovery ---
@@ -251,6 +252,32 @@ function resolveImagePaths(html: string, baseDir: string): string {
       return `${prefix}${pathToFileURL(absolute).href}`;
     },
   );
+}
+
+function normalizeReadingHtml(html: string): string {
+  let protectedDepth = 0;
+  return html.replace(/<[^>]+>|&[^;]+;|[^<&]+/g, (token) => {
+    if (token.startsWith('<')) {
+      const tagName = token.match(/^<\/?\s*([a-zA-Z0-9-]+)/)?.[1]?.toLowerCase();
+      if (tagName && /^(pre|code|kbd|samp)$/i.test(tagName)) {
+        if (/^<\//.test(token)) protectedDepth = Math.max(0, protectedDepth - 1);
+        else if (!/\/>$/.test(token)) protectedDepth++;
+      }
+      return token;
+    }
+
+    if (token.startsWith('&') || protectedDepth > 0) return token;
+
+    const cjk = String.raw`[\p{Script=Han}\u3040-\u30ff\uff00-\uffef]`;
+    const latin = String.raw`[A-Za-z0-9][A-Za-z0-9.+#/@_-]*`;
+    const fixedGap = '&#8239;';
+
+    return token
+      .replace(new RegExp(`(${cjk})\\s+(${latin})`, 'gu'), `$1${fixedGap}$2`)
+      .replace(new RegExp(`(${latin})\\s+(${cjk})`, 'gu'), `$1${fixedGap}$2`)
+      .replace(/([0-9])\s+([年月日亿万%])/g, `$1${fixedGap}$2`)
+      .replace(/([年月日亿万%])\s+([0-9])/g, `$1${fixedGap}$2`);
+  });
 }
 
 function addImageDimensions(html: string, baseDir: string): string {
@@ -548,7 +575,7 @@ function buildPageSections(
     contentTokens.push(...section.tokens);
   }
 
-  const contentHtml = contentHtmlParts.join('\n');
+  const contentHtml = normalizeReadingHtml(contentHtmlParts.join('\n'));
   if (contentHtml.trim()) {
     pages.push({
       type: 'content',
@@ -998,8 +1025,6 @@ function generateCaption(
   fm: Frontmatter,
   topicTags: string,
 ): string {
-  const truncatedTitle = title.length > 20 ? title.slice(0, 18) + '...' : title;
-
   const description = fm.description || fm.summary || '';
 
   const userTags = topicTags
@@ -1011,7 +1036,7 @@ function generateCaption(
   const tagStr = allTags.map((t) => `#${t}`).join(' ');
 
   return [
-    truncatedTitle,
+    title,
     '',
     description,
     '',
@@ -1075,7 +1100,7 @@ async function render(
   const sections = splitByHeadings(tokens);
   const pages = buildPageSections(sections, fm, resolvedAuthor, topicTags, baseDir);
   const css = loadCss(theme);
-  const contentWidth = size.width - 164;
+  const contentWidth = size.width - CONTENT_SIDE_PAD * 2;
   const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT;
   const dimensionCss = `body{height:${size.height}px;width:${size.width}px;min-height:${size.height}px;}`;
   const dims = `height:${size.height}px;width:${size.width}px;min-height:${size.height}px;`;

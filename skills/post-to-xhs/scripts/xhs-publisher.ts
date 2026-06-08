@@ -350,7 +350,7 @@ Usage:
 
 Options:
   --images <dir>    Directory containing carousel images
-  --title <text>    Note title (max 20 chars, from caption.md if omitted)
+  --title <text>    Note title (from caption.md if omitted)
   --desc <text>     Note description (from caption.md if omitted)
   --profile <dir>   Chrome profile path (default: ~/.baoyu-skills/xhs-chrome-profile)
   --dry-run         Preview without publishing
