@@ -119,10 +119,10 @@ ${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--th
 
 **Rendering rules**:
 - Frontmatter title → Cover page title
-- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`; rendered complete without cropping
+- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`; placed in a 4:3 visual frame, with the foreground image rendered complete without cropping and a soft same-image background for non-4:3 covers
 - Frontmatter description/summary → Caption text only, not cover text
 - H2 headings → Inline content headings, not forced page breaks
-- Content overflow → Auto-split into multiple pages by visual height
+- Content overflow → Auto-split sequentially using browser-measured layout height; prose paragraphs can continue across pages like article text, while images stay as whole blocks at the content width and move to the next page when they do not fit at their render size; the final page keeps the remaining content naturally
 - Inline images → Embedded and rendered
 - Ending page → CTA + hashtags + author
 

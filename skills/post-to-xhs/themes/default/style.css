@@ -49,7 +49,7 @@ body {
 .cover::before {
   content: '';
   position: absolute;
-  top: 108px;
+  top: 96px;
   left: 72px;
   width: 132px;
   height: 28px;
@@ -61,7 +61,7 @@ body {
   position: absolute;
   left: 72px;
   right: 72px;
-  bottom: 86px;
+  bottom: 72px;
   height: 4px;
   background: rgba(23, 23, 27, 0.32);
 }
@@ -77,20 +77,47 @@ body {
 
 .cover .cover-image {
   width: calc(100% + 144px);
-  aspect-ratio: var(--cover-image-ratio, 4 / 3);
-  margin: 178px -72px 56px;
+  aspect-ratio: 4 / 3;
+  margin: 150px -72px 48px;
   border-radius: 0;
   overflow: hidden;
   border: none;
   box-shadow: none;
-  background: transparent;
+  background: var(--bg-warm);
+  position: relative;
+  isolation: isolate;
 }
 
-.cover .cover-image img {
+.cover .cover-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(251, 250, 247, 0.10), rgba(251, 250, 247, 0.24)),
+    rgba(251, 250, 247, 0.26);
+}
+
+.cover .cover-image-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  filter: blur(24px) saturate(0.86);
+  opacity: 0.34;
+  transform: scale(1.08);
+  z-index: -2;
+}
+
+.cover .cover-image-fg {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: contain;
+  position: relative;
+  z-index: 1;
 }
 
 .cover .title-area {
@@ -125,7 +152,7 @@ body {
   font-size: 64px;
   font-weight: 700;
   line-height: 1.16;
-  margin-bottom: 54px;
+  margin-bottom: 44px;
   max-width: 940px;
   color: var(--text);
   letter-spacing: 0;
@@ -203,9 +230,21 @@ body {
   color: #202124;
   flex: 1;
   font-weight: 500;
+  text-align: justify;
+  text-justify: inter-ideograph;
 }
 
 .content .body p { margin-bottom: 28px; }
+
+.content .body h2,
+.content .body h3 {
+  break-after: avoid;
+}
+
+.content .body img,
+.content .body p:has(img) {
+  break-inside: avoid;
+}
 
 .content .body .inline-section-title,
 .content .body h2.inline-section-title {
