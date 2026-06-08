@@ -4,7 +4,7 @@ description: >
   将 Markdown 文章渲染为小红书风格轮播图 PNG。
   当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
   "post to xhs"时使用。
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     homepage: https://github.com/FengKequanX/just-write#post-to-xhs
