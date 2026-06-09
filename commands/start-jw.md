@@ -31,5 +31,7 @@ If @$1 is specific (e.g., "写一篇关于 Altman 改口的文章"), you may fas
 4. **Never invoke a sub-skill from a different step.** Each step has its designated skill.
 5. **Inline image placeholders during writing.** `![描述](imgs/xxx.png)` for every factual claim. Not after.
 6. **After user says "确认内容", immediately output the screenshot source list.** Don't wait to be asked.
+7. **Prefer first-party screenshot sources whenever possible.** Use official announcements, original papers, product docs, company blogs, filings, or primary social posts before media summaries.
+8. **After user says "确认排版：X号", rename the article folder and same-name markdown files to the confirmed final title before moving to publishing assets.** Use a filesystem-safe title and never overwrite existing paths.
 
 Now invoke `Skill('just-write')` to load the full workflow, then begin from Step 1.
