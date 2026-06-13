@@ -18,6 +18,13 @@ metadata:
 
 将 Markdown 文章渲染为小红书风格轮播图 PNG，生成文案（caption.md），用户手动上传到小红书创作者平台。
 
+## MANDATORY Boundaries
+
+1. **只生成素材。** 本 skill 的终点是轮播图 PNG 和 `caption.md` 落盘。
+2. **禁止自动发布。** 不得打开或控制小红书创作者平台，不得上传图片、填写标题或正文、点击发布，也不得调用任何发布脚本或浏览器自动化作为后续步骤。
+3. **最终标题原样复用。** `caption.md` 第一行、封面页标题必须完整使用 Markdown frontmatter 中已经确认的最终标题，不得因 20 字限制、点击率、平台风格或 SEO 自动缩写、改写或另拟标题。若平台提示超长，只在完成报告中提醒用户手动处理，不改文件。
+4. 用户说“发小红书”“同步小红书”时，在 just-write 工作流中一律解释为“生成可供手动发布的小红书素材”。
+
 ## Language
 
 **Match user's language**: Respond in the same language the user uses.
@@ -157,7 +164,7 @@ Caption: [output-dir]/caption.md
 • Hashtags: [tags]
 
 Next step:
-→ 打开小红书创作者平台手动上传图片
+→ 素材已准备好，请用户自行打开小红书创作者平台手动上传
 → https://creator.xiaohongshu.com/publish/publish
 ```
 

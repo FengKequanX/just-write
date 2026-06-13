@@ -33,5 +33,7 @@ If @$1 is specific (e.g., "写一篇关于 Altman 改口的文章"), you may fas
 6. **After user says "确认内容", immediately output the screenshot source list.** Don't wait to be asked.
 7. **Prefer first-party screenshot sources whenever possible.** Use official announcements, original papers, product docs, company blogs, filings, or primary social posts before media summaries.
 8. **After user says "确认排版：X号", rename the article folder and same-name markdown files to the confirmed final title before moving to publishing assets.** Use a filesystem-safe title and never overwrite existing paths.
+9. **Lock the final title after confirmation.** Reuse it verbatim in frontmatter, H1, paths, WeChat, Xiaohongshu cover, and `caption.md`. Never shorten or rewrite it for platform limits, engagement, or SEO unless the user explicitly requests a title change.
+10. **Xiaohongshu is materials-only.** Generate carousel images and `caption.md`, then stop. Never open the creator platform, upload files, fill forms, or publish.
 
 Now invoke `Skill('just-write')` to load the full workflow, then begin from Step 1.

@@ -50,6 +50,10 @@ description: >-
 
 8. **MANDATORY "确认排版：X号"后立即同步最终标题到目录和文件名。** 这是 Step 4 到 Step 5 的交接动作，必须在配图检查前完成。用用户确认的标题生成安全文件名，并重命名文章文件夹及同名 Markdown 文件；后续所有路径都必须使用新名称。
 
+9. **MANDATORY 用户确认标题后锁定标题。** `确认排版：X号` 或用户明确确认自定义标题后，该标题是全文和所有平台素材的唯一最终标题。后续 frontmatter、正文 H1、目录名、文件名、微信公众号标题、小红书封面标题和 `caption.md` 必须保持一致；不得为了平台字数、点击率、SEO 或“更适合平台”擅自缩写、改写或另拟标题。只有用户明确要求修改标题时才可变更，并重新同步所有相关文件。
+
+10. **MANDATORY 小红书只准备素材，不执行发布。** 用户要求“同步小红书”“发小红书”或类似操作时，只加载 `post-to-xhs` 生成轮播图和 `caption.md`。不得打开小红书创作者平台，不得上传图片、填写表单或点击发布；完成后把素材目录交给用户手动发布。
+
 ---
 
 ## 工作流
@@ -229,6 +233,8 @@ description: >-
 确认后回复"确认排版：X号"。
 ```
 
+用户确认后，所选标题立即进入锁定状态。除非用户明确要求改标题，否则后续任何步骤和平台都不得生成替代标题。
+
 ---
 
 ## Step 5: 配图与发布确认
@@ -252,6 +258,7 @@ description: >-
 5. 保留 `imgs/` 目录及其中图片路径不变。
 6. 如果目标目录或目标文件已存在，停止并向用户说明冲突，不覆盖任何文件。
 7. 后续 Step 5/Step 6 的 `排版文件`、发布命令、小红书渲染输入，都必须使用重命名后的路径。
+8. 将最终标题写入原稿 H1 和排版稿 frontmatter；后续平台素材完整复用该标题，不做平台化改写。
 
 ### 5.1 截图素材
 
@@ -300,13 +307,14 @@ description: >-
 ### 6.2 小红书（可选）
 
 微信发布后，检查 `.baoyu-skills/post-to-xhs/EXTEND.md` 的 `enabled` 配置：
-- `enabled: true` → 询问用户是否同步发小红书
-- 用户确认后加载并遵循 `post-to-xhs` companion skill
+- `enabled: true` → 询问用户是否生成小红书素材
+- 用户确认后加载并遵循 `post-to-xhs` companion skill，只生成轮播图和 `caption.md`
+- 不打开小红书创作者平台，不上传、不填写、不点击发布
 
 ### 发布后
 
 - 微信：告知草稿箱链接 https://mp.weixin.qq.com → 内容管理 → 草稿箱
-- 小红书：确认发布结果
+- 小红书：告知素材目录和 `caption.md` 路径，由用户手动发布
 
 ---
 
@@ -352,7 +360,7 @@ if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
 fi
 ```
 
-### 小红书发布
+### 小红书素材生成
 
 安装依赖：
 ```bash
@@ -362,10 +370,9 @@ if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
 fi
 ```
 
-发布命令：
+生成命令：
 ```bash
 bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md"
-bun <plugin-dir>/skills/post-to-xhs/scripts/xhs-publisher.ts
 ```
 
 ### 配置文件

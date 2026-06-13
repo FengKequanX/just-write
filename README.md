@@ -111,7 +111,7 @@ only_fans_can_comment: 0
 
 主题选项：`default` / `grace` / `simple` / `modern`
 
-## 配置小红书发布
+## 配置小红书素材生成
 
 ### 1. （可选）偏好设置
 
@@ -144,9 +144,11 @@ default_topic_tags: AI观察,科技,编程
 
 生成的图片和文案保存在输出目录（`[文章标题]-xhs/`）。
 
-### 3. 手动上传
+### 3. 手动发布
 
 图片生成后，打开 [小红书创作者平台](https://creator.xiaohongshu.com/publish/publish) 手动上传图片，从生成的 `caption.md` 复制完整标题和文案。
+
+just-write 不会打开或控制小红书创作者平台，也不会代替用户上传、填写或点击发布。文章最终标题一经确认，轮播图和 `caption.md` 会原样复用，不做平台化缩写。
 
 ## 文章目录结构
 
@@ -195,7 +197,7 @@ Claude Code 也可以使用 slash 命令：
 | 排版优化 | 确认排版：X号 |
 | 配图与发布 | 确认发布 |
 
-当前支持：**微信公众号**、**小红书**。
+当前支持：**微信公众号发布**、**小红书素材生成**。
 
 ## v1.1.0
 
@@ -213,7 +215,7 @@ Claude Code 也可以使用 slash 命令：
 | humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) | 去 AI 写作痕迹 |
 | baoyu-format-markdown | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 排版优化 + 标题生成 + CJK 排版 |
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
-| post-to-xhs | 内置 | 小红书发布 |
+| post-to-xhs | 内置 | 小红书轮播图与文案素材生成 |
 
 ## 开发者：同步上游技能
 
