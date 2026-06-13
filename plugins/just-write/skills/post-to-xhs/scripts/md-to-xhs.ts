@@ -967,21 +967,43 @@ function buildEndingHtml(
   dims: string,
 ): string {
   const tagHtml = tags.map((t) => `<span class="tag">#${escapeHtml(t)}</span>`).join('\n    ');
+  const tagsSection = tagHtml
+    ? `<div class="ending-topics">
+      <div class="ending-meta-label">TOPICS</div>
+      <div class="tags">
+        ${tagHtml}
+      </div>
+    </div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="ending" style="${dims}">
-  <div style="flex:1"></div>
   <div class="ending-content">
-    <div class="cta">感谢阅读</div>
-    <div class="cta-sub">关注我，获取更多精彩内容</div>
-    <div class="divider"></div>
-    <div class="tags">
-      ${tagHtml}
+    <div class="ending-kicker">
+      <span>THE END</span>
+      <span class="ending-kicker-line"></span>
+      <span>感谢看到这里</span>
     </div>
-    <div class="end-author">— <strong>${escapeHtml(author)}</strong></div>
+    <div class="cta">
+      <span>感谢</span>
+      <span class="cta-accent">阅读。</span>
+    </div>
+    <div class="cta-sub">关注炙青，一起观察 AI 与科技产品的流动与澎湃。</div>
+    <div class="ending-rule"></div>
+    <div class="ending-meta${tagHtml ? '' : ' ending-meta--author-only'}">
+      ${tagsSection}
+      <div class="end-author">
+        <span class="ending-meta-label">WRITTEN BY</span>
+        <strong>${escapeHtml(author)}</strong>
+      </div>
+    </div>
   </div>
-  <div style="flex:1"></div>
+  <div class="ending-footer">
+    <span>JUST WRITE</span>
+    <span>${String(totalPages).padStart(2, '0')}</span>
+  </div>
   ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
