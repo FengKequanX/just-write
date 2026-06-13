@@ -4,16 +4,42 @@
 
 ## 安装
 
-### Codex
+### Codex App
 
-直接从 GitHub 安装：
+Codex App 目前不能在 Plugins 页面中直接搜索尚未添加的第三方 GitHub marketplace。
+
+推荐方式：打开 Codex App 中的任意本地线程，把下面这句话发送给 Codex：
+
+> 请从 GitHub marketplace `FengKequanX/just-write` 安装插件 `just-write@just-write-local`，并确认插件已启用。
+
+Codex 执行本地命令时可能会请求权限，确认即可。安装完成后新建一个线程，just-write 才会出现在新的会话中。
+
+手动安装：如果系统终端中可以使用 `codex` 命令，打开 PowerShell 或 Terminal，执行：
 
 ```bash
 codex plugin marketplace add FengKequanX/just-write
 codex plugin add just-write@just-write-local
 ```
 
-本地开发时，也可以克隆仓库后在项目根目录执行：
+如果提示找不到 `codex` 命令，请使用上面的 App 对话安装方式，或先按照 [Codex CLI 官方文档](https://developers.openai.com/codex/cli) 安装 CLI。
+
+如果只执行了第一条命令，请重启 Codex App，然后打开 **Plugins**，选择 **Just Write Local**，再安装 **just-write**。
+
+更新插件时，也可以直接告诉 Codex：
+
+> 请更新 `just-write@just-write-local` 到 GitHub 上的最新版本，并确认插件已启用。
+
+或手动执行：
+
+```bash
+codex plugin marketplace upgrade just-write-local
+codex plugin remove just-write@just-write-local
+codex plugin add just-write@just-write-local
+```
+
+### Codex 本地开发
+
+克隆仓库后，在仓库根目录执行：
 
 ```bash
 codex plugin marketplace add .
@@ -39,15 +65,15 @@ codex plugin add just-write@just-write-local
 /plugin install just-write
 ```
 
-发布时 Agent 自动安装脚本依赖，无需手动操作。
+运行相关功能时，Agent 会按需安装脚本依赖。
 
 ## 前置条件
 
 | 依赖 | 说明 |
 |------|------|
-| **bun** | `npm install -g bun` 或 https://bun.sh |
+| **bun 或 npx** | 推荐安装 bun：`npm install -g bun`；已有 Node.js/npm 时也可通过 npx 运行 |
 | **WeChat API 凭证** | 用于公众号发布（不发布则不需要） |
-| **Chrome / Edge** | ≥ 112，用于小红书图片渲染（headless 截图） |
+| **Chrome / Edge** | ≥ 112，用于浏览器发布和小红书图片渲染 |
 
 ## 配置公众号发布
 
@@ -63,7 +89,7 @@ codex plugin add just-write@just-write-local
 
 ### 3. 保存凭证
 
-在项目根目录创建 `.baoyu-skills/.env`：
+在你使用 just-write 写文章的工作目录中创建 `.baoyu-skills/.env`：
 
 ```
 WECHAT_APP_ID=你的AppID
@@ -72,7 +98,7 @@ WECHAT_APP_SECRET=你的AppSecret
 
 ### 4. （可选）偏好设置
 
-创建 `.baoyu-skills/baoyu-post-to-wechat/EXTEND.md`：
+在同一工作目录中创建 `.baoyu-skills/baoyu-post-to-wechat/EXTEND.md`：
 
 ```yaml
 default_theme: default
@@ -89,7 +115,7 @@ only_fans_can_comment: 0
 
 ### 1. （可选）偏好设置
 
-创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
+在文章工作目录中创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
 
 ```yaml
 default_author: 作者名
@@ -189,7 +215,7 @@ Claude Code 也可以使用 slash 命令：
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
 | post-to-xhs | 内置 | 小红书发布 |
 
-## 更新
+## 开发者：同步上游技能
 
 ```bash
 bash update.sh
