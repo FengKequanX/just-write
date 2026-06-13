@@ -1,9 +1,9 @@
 ---
 name: just-write
-description: Trigger immediately when user wants to write, create, or publish content, especially:
-  - "写一篇关于XX的文章"、"帮我写XX"
-  - "把这个想法写成文章"、"润色一下"
-  - 任何表达写作意图或内容创作需求
+description: >-
+  Trigger immediately when the user wants to write, create, edit, format, or
+  publish content, including requests such as "写一篇关于 XX 的文章"、"帮我写 XX"、
+  "把这个想法写成文章"、"润色一下"，以及其他内容创作需求。
 ---
 
 # 微信公众号内容创作工作室
@@ -34,11 +34,11 @@ description: Trigger immediately when user wants to write, create, or publish co
    | Step 4 | `确认排版：X号` |
    | Step 5 | `确认发布` |
 
-3. **MANDATORY 每个 Step 调用对应的子 skill，不要自己手动完成。** 调用白名单：
-   - Step 1 → `Skill('just-write:brainstorming')`
-   - Step 3 → `Skill('just-write:humanizer-zh')`
-   - Step 4 → `Skill('just-write:baoyu-format-markdown')`
-   - Step 6 → `Skill('just-write:baoyu-post-to-wechat')`
+3. **MANDATORY 每个 Step 使用对应的 companion skill，不要自己手动替代。** 当前 Agent 应加载并遵循同一插件中的对应 skill：
+   - Step 1 → `brainstorming`
+   - Step 3 → `humanizer-zh`
+   - Step 4 → `baoyu-format-markdown`
+   - Step 6 → `baoyu-post-to-wechat`
 
 4. **MANDATORY 写文章时每个事实性论断同步写入图片占位符。** 数据、引用、新闻事件必须带 `![描述](imgs/xxx.png)`。纯个人观点不需要。写完后再补 = 失败。
 
@@ -63,7 +63,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ## Step 1: 选题讨论
 
-**必须调用 `Skill('just-write:brainstorming')` 辅助选题。** brainstorming skill 会一次问一个问题（最多 3 个），帮用户理清主题和角度。
+**必须加载并遵循 `brainstorming` companion skill 辅助选题。** 该 skill 会一次问一个问题（最多 3 个），帮用户理清主题和角度。
 
 **快速通道：** 如果用户已经明确说了主题和角度，直接确认选题，不需要再问。
 
@@ -92,7 +92,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 ### 前置调研
 
 涉及近期事件、产品或数据时：
-1. 用 `WebSearch` 查最新信息（官方公告、36kr/量子位/财联社/Reuters）
+1. 使用当前 Agent 可用的联网搜索工具查最新信息，优先官方公告和一手来源，必要时再参考可靠媒体
 2. 验证事实后再写
 3. **不凭记忆写——先搜索**
 
@@ -169,7 +169,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 **前置条件：用户必须已说出"确认内容"。** 未确认前不得执行润色。
 
-**必须调用 `Skill('just-write:humanizer-zh')` 润色文章。** 不要自己手动润色。
+**必须加载并遵循 `humanizer-zh` companion skill 润色文章。** 不要自己手动替代。
 
 - 去 AI 写作痕迹（24条规则）
 - 提升文字质感
@@ -195,7 +195,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 **前置条件：用户必须已说出"确认润色"。** 未确认前不得执行排版。
 
-**必须调用 `Skill('just-write:baoyu-format-markdown')` 进行排版优化。** 不要自己手动排版。
+**必须加载并遵循 `baoyu-format-markdown` companion skill 进行排版优化。** 不要自己手动替代。
 
 调用 skill 时，自动选择"优化排版"选项，不询问用户选择排版模式。
 
@@ -293,7 +293,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 ### 6.1 微信公众号
 
-**必须调用 `Skill('just-write:baoyu-post-to-wechat')` 发布。**
+**必须加载并遵循 `baoyu-post-to-wechat` companion skill 发布。**
 
 发布时使用排版后的文件 `{filename}-formatted.md` 作为输入。
 
@@ -301,7 +301,7 @@ description: Trigger immediately when user wants to write, create, or publish co
 
 微信发布后，检查 `.baoyu-skills/post-to-xhs/EXTEND.md` 的 `enabled` 配置：
 - `enabled: true` → 询问用户是否同步发小红书
-- 用户确认后调用 `Skill('just-write:post-to-xhs')`
+- 用户确认后加载并遵循 `post-to-xhs` companion skill
 
 ### 发布后
 

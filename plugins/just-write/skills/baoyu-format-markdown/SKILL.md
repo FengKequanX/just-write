@@ -1,8 +1,8 @@
 ---
 name: baoyu-format-markdown
 description: Formats plain text or markdown files with frontmatter, titles, summaries, headings, bold, lists, and code blocks. Use when user asks to "format markdown", "beautify article", "add formatting", or improve article layout. Outputs to {filename}-formatted.md.
-version: 1.57.0
 metadata:
+  version: 1.57.0
   openclaw:
     homepage: https://github.com/JimLiu/baoyu-skills#baoyu-format-markdown
     requires:
@@ -60,7 +60,7 @@ If none found, use defaults — no first-time setup required for this skill.
 
 ## Usage
 
-The workflow has two phases: **Analyze** (understand the content) then **Format** (apply formatting). Claude performs content analysis and formatting (Steps 1-5), then runs the script for typography fixes (Step 6).
+The workflow has two phases: **Analyze** (understand the content) then **Format** (apply formatting). The current agent performs content analysis and formatting (Steps 1-5), then runs the script for typography fixes (Step 6).
 
 ## Workflow
 

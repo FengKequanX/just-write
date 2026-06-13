@@ -4,6 +4,33 @@
 
 ## 安装
 
+### Codex
+
+直接从 GitHub 安装：
+
+```bash
+codex plugin marketplace add FengKequanX/just-write
+codex plugin add just-write@just-write-local
+```
+
+本地开发时，也可以克隆仓库后在项目根目录执行：
+
+```bash
+codex plugin marketplace add .
+codex plugin add just-write@just-write-local
+```
+
+修改插件源码后，执行以下命令刷新安装：
+
+```bash
+codex plugin remove just-write@just-write-local
+codex plugin add just-write@just-write-local
+```
+
+插件源文件位于 `plugins/just-write/`。安装或更新后请新建一个 Codex 线程，使新的 skills 生效。
+
+### Claude Code
+
 ```bash
 # 1. 添加市场
 /plugin marketplace add https://github.com/FengKequanX/just-write
@@ -112,11 +139,11 @@ default_topic_tags: AI观察,科技,编程
 
 ## 使用
 
-直接告诉 Claude：
+直接告诉 Claude Code 或 Codex：
 
 > 帮我写一篇关于DeepSeek V4的公众号文章
 
-或 slash 命令：
+Claude Code 也可以使用 slash 命令：
 
 ```
 /just-write:start-jw 想写什么
@@ -143,6 +170,14 @@ default_topic_tags: AI观察,科技,编程
 | 配图与发布 | 确认发布 |
 
 当前支持：**微信公众号**、**小红书**。
+
+## v1.1.0
+
+- 新增 Codex 插件清单和仓库级 marketplace，可通过 Codex CLI 安装。
+- 调整为 `plugins/just-write/` 标准插件目录，同时兼容 Claude Code 和 Codex。
+- 将工作流中的专用工具调用改为跨 Agent 的 companion skill 表述。
+- 修正 skills frontmatter，使全部 6 个 skills 通过 Codex 校验。
+- 更新 `update.sh`，让上游技能同步继续写入新的插件目录。
 
 ## 内置技能
 

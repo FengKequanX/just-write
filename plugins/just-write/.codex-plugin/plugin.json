@@ -1,0 +1,38 @@
+{
+  "name": "just-write",
+  "version": "1.1.0",
+  "description": "那就开写吧：把想法变成可发布的微信公众号文章，并支持润色、排版与发布。",
+  "author": {
+    "name": "炙青",
+    "url": "https://github.com/FengKequanX"
+  },
+  "homepage": "https://github.com/FengKequanX/just-write",
+  "repository": "https://github.com/FengKequanX/just-write",
+  "license": "MIT",
+  "keywords": [
+    "writing",
+    "wechat",
+    "公众号",
+    "content-creation",
+    "publishing"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Just Write",
+    "shortDescription": "微信公众号文章写作、润色、排版与发布工作流",
+    "longDescription": "从选题讨论开始，经过内容生成、中文去 AI 味、Markdown 排版、配图确认，最终发布到微信公众号，也可生成小红书轮播图。",
+    "developerName": "炙青",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Edit",
+      "Publish"
+    ],
+    "websiteURL": "https://github.com/FengKequanX/just-write",
+    "defaultPrompt": [
+      "帮我把这个想法写成一篇公众号文章",
+      "帮我润色并排版这篇文章",
+      "把这篇文章发布到微信公众号草稿箱"
+    ]
+  }
+}
