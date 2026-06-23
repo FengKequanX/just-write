@@ -74,6 +74,7 @@ codex plugin add just-write@just-write-local
 | **bun 或 npx** | 推荐安装 bun：`npm install -g bun`；已有 Node.js/npm 时也可通过 npx 运行 |
 | **WeChat API 凭证** | 用于公众号发布（不发布则不需要） |
 | **Chrome / Edge** | ≥ 112，用于浏览器发布和小红书图片渲染 |
+| **uv（可选）** | 用于安装 `social-auto-upload`，开启抖音图文自动发布 |
 
 ## 配置公众号发布
 
@@ -150,6 +151,52 @@ default_topic_tags: AI观察,科技,编程
 
 just-write 不会打开或控制小红书创作者平台，也不会代替用户上传、填写或点击发布。文章最终标题一经确认，轮播图和 `caption.md` 会原样复用，不做平台化缩写。
 
+## 配置抖音自动发布
+
+抖音发布基于社区项目 [social-auto-upload](https://github.com/dreammis/social-auto-upload) 的浏览器自动化能力，将小红书轮播图目录同步发布为抖音图文。小红书仍保持手动发布。
+
+### 1. 安装上传工具
+
+推荐安装到文章项目的 `.baoyu-skills/` 目录，避免污染插件源码：
+
+```powershell
+mkdir .baoyu-skills
+git clone https://github.com/dreammis/social-auto-upload.git .baoyu-skills/social-auto-upload
+cd .baoyu-skills/social-auto-upload
+uv venv
+uv pip install -e .
+copy conf.example.py conf.py
+.venv\Scripts\patchright.exe install chromium
+```
+
+如果 `patchright install chromium` 使用镜像源失败，可直接使用默认官方下载源重试。
+
+### 2. 登录抖音账号
+
+```powershell
+cd .baoyu-skills/social-auto-upload
+.venv\Scripts\sau.exe douyin login --account creator
+.venv\Scripts\sau.exe douyin check --account creator
+```
+
+`creator` 是本地账号别名，可替换为任意名称。
+
+### 3. 发布抖音图文
+
+先用 `post-to-xhs` 生成小红书轮播图目录，然后把该目录交给 `sync-to-douyin`：
+
+```powershell
+bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator
+```
+
+脚本会自动读取目录内的 `*.png` 和 `caption.md`，用第一行作为标题，提取 `#话题` 作为抖音标签，并调用 `sau douyin upload-note` 发布图文。
+
+安全起见，首次使用可以先 dry-run：
+
+```powershell
+bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator --dry-run
+```
+
 ## 文章目录结构
 
 每篇文章独立文件夹管理：
@@ -197,7 +244,13 @@ Claude Code 也可以使用 slash 命令：
 | 排版优化 | 确认排版：X号 |
 | 配图与发布 | 确认发布 |
 
-当前支持：**微信公众号发布**、**小红书素材生成**。
+当前支持：**微信公众号发布**、**小红书素材生成**、**抖音图文自动发布**。
+
+## v1.2.0
+
+- 新增 `sync-to-douyin` skill，可将小红书轮播图目录自动发布为抖音图文。
+- 接入 `social-auto-upload` 的 `sau douyin upload-note` 命令，支持账号别名、dry-run、标题/正文/标签解析。
+- 明确发布边界：小红书仍只生成素材并手动发布，抖音可在用户确认后自动发布。
 
 ## v1.1.0
 
@@ -216,6 +269,7 @@ Claude Code 也可以使用 slash 命令：
 | baoyu-format-markdown | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 排版优化 + 标题生成 + CJK 排版 |
 | baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
 | post-to-xhs | 内置 | 小红书轮播图与文案素材生成 |
+| sync-to-douyin | 内置，基于 [social-auto-upload](https://github.com/dreammis/social-auto-upload) | 抖音图文自动发布 |
 
 ## 开发者：同步上游技能
 

@@ -54,6 +54,8 @@ description: >-
 
 10. **MANDATORY 小红书只准备素材，不执行发布。** 用户要求“同步小红书”“发小红书”或类似操作时，只加载 `post-to-xhs` 生成轮播图和 `caption.md`。不得打开小红书创作者平台，不得上传图片、填写表单或点击发布；完成后把素材目录交给用户手动发布。
 
+11. **MANDATORY 抖音发布使用独立确认。** 抖音图文自动发布只能消费已经生成的小红书轮播图目录，并加载 `sync-to-douyin` companion skill。未获得用户明确确认前只能 dry-run；不得把抖音自动发布规则套用到小红书。
+
 ---
 
 ## 工作流
@@ -311,10 +313,19 @@ description: >-
 - 用户确认后加载并遵循 `post-to-xhs` companion skill，只生成轮播图和 `caption.md`
 - 不打开小红书创作者平台，不上传、不填写、不点击发布
 
+### 6.3 抖音（可选）
+
+小红书素材生成后，询问用户是否同步发布到抖音：
+- 用户确认后加载并遵循 `sync-to-douyin` companion skill
+- 使用小红书轮播图输出目录作为输入，读取其中的 PNG 和 `caption.md`
+- 未确认直接发布时，只运行 `--dry-run`
+- 抖音通过 `social-auto-upload` 的浏览器自动化发布，失败时保留素材并提示用户检查登录状态
+
 ### 发布后
 
 - 微信：告知草稿箱链接 https://mp.weixin.qq.com → 内容管理 → 草稿箱
 - 小红书：告知素材目录和 `caption.md` 路径，由用户手动发布
+- 抖音：告知使用的账号别名、图片数量、标题和发布结果
 
 ---
 
@@ -373,6 +384,36 @@ fi
 生成命令：
 ```bash
 bun <plugin-dir>/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md"
+```
+
+### 抖音图文发布
+
+安装 `social-auto-upload`：
+```powershell
+mkdir .baoyu-skills
+git clone https://github.com/dreammis/social-auto-upload.git .baoyu-skills/social-auto-upload
+cd .baoyu-skills/social-auto-upload
+uv venv
+uv pip install -e .
+copy conf.example.py conf.py
+.venv\Scripts\patchright.exe install chromium
+```
+
+登录和检查抖音账号：
+```powershell
+cd .baoyu-skills/social-auto-upload
+.venv\Scripts\sau.exe douyin login --account creator
+.venv\Scripts\sau.exe douyin check --account creator
+```
+
+dry-run：
+```powershell
+bun <plugin-dir>/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator --dry-run
+```
+
+确认后发布：
+```powershell
+bun <plugin-dir>/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator
 ```
 
 ### 配置文件
