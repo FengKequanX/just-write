@@ -7,11 +7,13 @@ import process from 'node:process';
 interface Options {
   dir?: string;
   account?: string;
+  caption?: string;
   sau: string;
   title?: string;
   note?: string;
   tags?: string;
   bgm?: string;
+  draft: boolean;
   dryRun: boolean;
 }
 
@@ -21,6 +23,10 @@ interface CaptionParts {
   tags: string[];
 }
 
+const MAX_TITLE_LENGTH = 20;
+const MAX_NOTE_LENGTH = 1000;
+const MAX_TAGS = 5;
+
 function printUsage(): never {
   console.log(`Sync a generated carousel folder to Douyin through social-auto-upload.
 
@@ -29,11 +35,13 @@ Usage:
 
 Options:
   --account <name>  social-auto-upload account name
+  --caption <path>  Douyin caption file (default: ../douyin/douyin-caption.md)
   --sau <path>      custom sau executable path (default: SAU_BIN or sau)
-  --title <title>   override title parsed from caption.md
-  --note <text>     override note body parsed from caption.md
-  --tags <a,b>      override tags parsed from caption.md hashtags
+  --title <title>   override title parsed from douyin-caption.md (max 20 characters)
+  --note <text>     override note body parsed from douyin-caption.md
+  --tags <a,b>      override tags parsed from douyin-caption.md (max 5)
   --bgm <name>      optional Douyin BGM name
+  --draft           open a prefilled Douyin editor and keep it open for manual completion
   --dry-run         show the upload command without publishing
   --help            show this help
 `);
@@ -43,6 +51,7 @@ Options:
 function parseArgs(args: string[]): Options {
   const options: Options = {
     sau: findDefaultSau(),
+    draft: false,
     dryRun: false,
   };
 
@@ -51,8 +60,12 @@ function parseArgs(args: string[]): Options {
     if (arg === '--help' || arg === '-h') printUsage();
     if (arg === '--dry-run') {
       options.dryRun = true;
+    } else if (arg === '--draft') {
+      options.draft = true;
     } else if (arg === '--account' && args[i + 1]) {
       options.account = args[++i];
+    } else if (arg === '--caption' && args[i + 1]) {
+      options.caption = args[++i];
     } else if (arg === '--sau' && args[i + 1]) {
       options.sau = args[++i]!;
     } else if (arg === '--title' && args[i + 1]) {
@@ -115,6 +128,14 @@ function parseCaption(captionPath: string): CaptionParts {
   const title = lines[firstNonEmptyIndex]!.trim();
   const bodyLines = lines.slice(firstNonEmptyIndex + 1);
   const hashtags = new Set<string>();
+  let publishingAdviceIndex = -1;
+
+  for (let i = bodyLines.length - 1; i >= 0; i--) {
+    const trimmed = bodyLines[i]!.trim();
+    if (!trimmed) continue;
+    if (/^[\-—–]\s*\S+/u.test(trimmed)) publishingAdviceIndex = i;
+    break;
+  }
 
   for (const match of raw.matchAll(/(^|\s)#([^\s#]+)/gu)) {
     const tag = match[2]?.trim().replace(/[，,。.!！？；;：:]+$/u, '');
@@ -123,11 +144,11 @@ function parseCaption(captionPath: string): CaptionParts {
 
   const note = bodyLines
     .map((line) => line.trimEnd())
-    .filter((line, index, arr) => {
+    .filter((line, index) => {
       const trimmed = line.trim();
       if (!trimmed) return true;
       if (/^(#[^\s#]+)(\s+#[^\s#]+)*$/u.test(trimmed)) return false;
-      if (index === arr.length - 1 && /^[\-—–]\s*\S+/u.test(trimmed)) return false;
+      if (index === publishingAdviceIndex) return false;
       return true;
     })
     .join('\n')
@@ -170,9 +191,13 @@ async function main(): Promise<void> {
     throw new Error(`Directory not found: ${outDir}`);
   }
 
-  const captionPath = path.join(outDir, 'caption.md');
+  const captionPath = options.caption
+    ? path.resolve(options.caption)
+    : path.resolve(outDir, '..', 'douyin', 'douyin-caption.md');
   if (!fs.existsSync(captionPath)) {
-    throw new Error(`caption.md not found in ${outDir}`);
+    throw new Error(
+      `Douyin caption not found: ${captionPath}. Create douyin/douyin-caption.md before uploading.`,
+    );
   }
 
   const images = readImages(outDir);
@@ -184,7 +209,22 @@ async function main(): Promise<void> {
   const title = options.title || caption.title;
   const note = options.note || caption.note || title;
   const tags = splitTags(options.tags);
-  const resolvedTags = tags.length > 0 ? tags : caption.tags;
+  const resolvedTags = [...new Set(tags.length > 0 ? tags : caption.tags)];
+
+  if (title.length > MAX_TITLE_LENGTH) {
+    throw new Error(`Douyin title exceeds ${MAX_TITLE_LENGTH} characters: ${title.length}`);
+  }
+  if (note.length > MAX_NOTE_LENGTH) {
+    throw new Error(`Douyin note exceeds ${MAX_NOTE_LENGTH} characters: ${note.length}`);
+  }
+  if (resolvedTags.length > MAX_TAGS) {
+    throw new Error(`Douyin supports at most ${MAX_TAGS} topics: received ${resolvedTags.length}`);
+  }
+  const tagWithWhitespace = resolvedTags.find((tag) => /\s/u.test(tag));
+  if (tagWithWhitespace) {
+    throw new Error(`Douyin topic must not contain spaces: ${tagWithWhitespace}`);
+  }
+
   const noteFile = createTempNoteFile(note);
 
   const sauArgs = [
@@ -202,13 +242,19 @@ async function main(): Promise<void> {
 
   if (resolvedTags.length > 0) sauArgs.push('--tags', resolvedTags.join(','));
   if (options.bgm) sauArgs.push('--bgm', options.bgm);
+  if (options.draft) sauArgs.push('--draft', '--headed');
 
   const summary = {
     account: options.account,
     imageCount: images.length,
     title,
+    titleLength: title.length,
+    noteLength: note.length,
     tags: resolvedTags,
+    tagCount: resolvedTags.length,
+    captionPath,
     noteFile,
+    mode: options.draft ? 'manual-handoff' : 'publish',
     dryRun: options.dryRun,
   };
 
