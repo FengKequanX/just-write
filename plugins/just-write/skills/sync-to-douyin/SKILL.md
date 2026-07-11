@@ -1,183 +1,66 @@
 ---
 name: sync-to-douyin
-description: >
-  Publish an existing Xiaohongshu carousel output folder to Douyin as an image
-  note with a platform-specific caption through the community
-  social-auto-upload CLI. Enforces Douyin title and topic limits. Use when the
-  user asks to sync XHS carousel images to Douyin, auto-upload to Douyin, or
-  reduce manual Douyin uploads.
-metadata:
-  version: 0.1.0
-  openclaw:
-    homepage: https://github.com/FengKequanX/just-write#sync-to-douyin
-    requires:
-      anyBins:
-        - bun
-        - npx
-      optionalBins:
-        - sau
+description: Validate and publish an existing Xiaohongshu carousel as a Douyin image note through social-auto-upload, using a separate Douyin caption and explicit confirmation. Use for Douyin image-note dry runs, draft handoff, or uploads; never use it to automate Xiaohongshu.
 ---
 
-# Sync to Douyin
+# Sync Carousel to Douyin
 
-Publish a generated carousel folder to Douyin as a graphic/image note by
-wrapping the `sau douyin upload-note` command from
-`dreammis/social-auto-upload`.
+Consume `<article-dir>/xhs/` and the independent `<article-dir>/douyin/douyin-caption.md`, then call `sau douyin upload-note`.
 
-## Boundaries
+## Safety boundary
 
-1. This skill only targets Douyin. It must not open, automate, or publish to
-   Xiaohongshu.
-2. Use an already generated `xhs/` carousel folder for numbered PNG files, but
-   never reuse `xhs/caption.md` as Douyin copy.
-3. Require a sibling `douyin/douyin-caption.md`. If it is missing, stop and
-   create it before any dry run or upload.
-4. Before running a real upload, confirm that the user wants to publish to
-   Douyin now. If confirmation is missing, run `--dry-run` only.
-5. Account login is handled by `social-auto-upload`. If the account is not
-   logged in, ask the user to run the login command in their local terminal.
-6. Browser automation may be affected by Douyin UI changes and platform risk
-   controls. Report failures plainly and preserve the generated materials.
+- Target Douyin only; never automate Xiaohongshu.
+- Use `--dry-run` unless the user explicitly says `确认发布抖音` in the current workflow.
+- Treat the Douyin title as platform-specific. Never write it back to the article, WeChat title, Xiaohongshu cover, or Xiaohongshu caption.
+- Preserve materials after browser, login, or platform failures and report the exact error.
 
-## Required Douyin Caption
+## Configuration
 
-Create this file for every article before syncing:
+Load the first existing `.baoyu-skills/sync-to-douyin/EXTEND.md` from the project, XDG config, or user home. Only these keys are valid:
+
+```yaml
+enabled: false
+default_account: creator
+```
+
+`enabled` controls whether the main workflow offers Douyin; it never authorizes a real upload. `--account` overrides `default_account`.
+
+## Caption contract
+
+Require this file before dry-run or upload:
 
 ```text
 <article-dir>/douyin/douyin-caption.md
 ```
 
-Use this format:
+Format:
 
 ```markdown
-抖音标题
+抖音独立标题
 
 正文
 
 #话题1 #话题2
 
-— 发布建议：添加音乐并确认发布时间后发布。
+— 发布建议：确认音乐和发布时间。
 ```
 
-The first non-empty line is the title. Pure hashtag lines become tags. A final
-line beginning with `—` is publishing advice and is not uploaded as body text.
+The first non-empty line is the title. Pure hashtag lines become topics. A final dash-prefixed advice line is not uploaded. Enforce title ≤ 20 characters, body ≤ 1,000 characters, at most 5 topics, and no spaces inside a topic. Present these counts before publishing.
 
-## Douyin Copy Strategy
+## Run
 
-Write the caption for Douyin instead of shortening the WeChat title or copying
-the Xiaohongshu caption. Aim for qualified views and completion, not empty
-clicks. Keep the account voice clear, restrained, personal, and opinionated.
+Dry-run by default:
 
-Apply these hard limits:
-
-- Keep the title at 20 characters or fewer. Prefer 12–18 characters so it is
-  readable in the feed. Count letters, numbers, spaces, and punctuation.
-- Use at most 5 topics. Prefer 3–5 highly relevant topics. Do not silently
-  truncate extras; revise the selection.
-- Keep the body at 1,000 characters or fewer. For a news/analysis image note,
-  usually target 80–200 Chinese characters.
-- Write multiword topics without spaces, such as `#AIAgent`.
-
-Construct the title as `specific entity/model + strongest change, result, or
-conflict`. Put searchable names such as `GPT-5.6` or `OpenAI` in the first half.
-State the value clearly, but never invent urgency, exaggerate conclusions, or
-use bait such as “震惊”“必看”“99%的人不知道”. Keep the title consistent with the
-cover and body.
-
-Structure the body for feed reading:
-
-1. Open with one short conclusion, contrast, or user-relevant change. Do not
-   begin with background history.
-2. Give 2–3 concrete facts or examples that support the opening.
-3. Add one personal judgment or practical implication for ordinary users or
-   developers.
-4. Optionally end with a genuine trade-off question. Do not use engagement bait
-   or unrelated calls to comment.
-
-Select topics by relevance, not raw popularity:
-
-- 1–2 exact entities or products, such as `#OpenAI` and `#GPT56`.
-- 1–2 vertical subjects, such as `#AIAgent` and `#大模型`.
-- Up to 1 broader discovery topic, such as `#AI`.
-- Use an official event or trending topic only when the content directly
-  matches it. Never add unrelated hot topics for reach.
-
-Before a dry run, report the proposed title and its length, body length, and the
-final topic count/list. Rewrite any generic cross-platform copy first.
-
-## Prerequisites
-
-Install and prepare `social-auto-upload` once:
-
-```powershell
-git clone https://github.com/dreammis/social-auto-upload.git
-cd social-auto-upload
-uv venv
-.venv\Scripts\activate
-uv pip install -e .
-$env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium
-sau douyin login --account creator
-sau douyin check --account creator
+```bash
+bun <this-skill>/scripts/douyin-note.ts <article-dir>/xhs --account <account> --dry-run
 ```
 
-Use any account name you like instead of `creator`; the same name is passed to
-this skill with `--account`.
+After `确认发布抖音`:
 
-## Script
-
-Resolve this skill directory as `{baseDir}` and run:
-
-```powershell
-bun {baseDir}\scripts\douyin-note.ts <xhs-output-dir> --account <account-name> --dry-run
+```bash
+bun <this-skill>/scripts/douyin-note.ts <article-dir>/xhs --account <account>
 ```
 
-For a real upload after explicit confirmation:
+Use `--draft` for a headed, prefilled editor handoff. The script reads only numbered PNG outputs, keeps argument boundaries intact, and removes its temporary body file after dry-run or upload.
 
-```powershell
-bun {baseDir}\scripts\douyin-note.ts <xhs-output-dir> --account <account-name>
-```
-
-Optional arguments:
-
-| Argument | Description |
-| --- | --- |
-| `<xhs-output-dir>` | Folder containing `01-cover.png`, content PNGs, and ending PNG |
-| `--account <name>` | `social-auto-upload` account name |
-| `--caption <path>` | Optional caption override; defaults to sibling `douyin/douyin-caption.md` |
-| `--sau <path>` | Custom `sau` executable path; otherwise uses `SAU_BIN`, then `<project>/.baoyu-skills/social-auto-upload/.venv/.../sau`, then `sau` |
-| `--title <title>` | Override the title parsed from `douyin-caption.md` |
-| `--note <text>` | Override the body text parsed from `douyin-caption.md` |
-| `--tags <a,b>` | Override tags parsed from hashtags in `douyin-caption.md` |
-| `--bgm <name>` | Optional BGM name passed to Douyin |
-| `--draft` | Open a headed, prefilled editor and keep it open for the user to add music or choose a scheduled time. Douyin web does not expose these items as account drafts in Work Management. |
-| `--dry-run` | Print the resolved upload command without publishing |
-
-## What the Script Does
-
-1. Sorts all PNG files in the carousel folder by filename.
-2. Reads sibling `douyin/douyin-caption.md`; aborts if it is missing.
-3. Uses the first non-empty line as the title.
-4. Extracts hashtags such as `#AI` or `#科技` as Douyin tags.
-5. Rejects titles over 20 characters, bodies over 1,000 characters, more than 5
-   topics, and topics containing spaces.
-6. Writes a temporary note text file to avoid command-line encoding issues.
-7. Calls:
-
-```powershell
-sau douyin upload-note --account <account> --images <pngs...> --title <title> --notef <temp-note> --tags <tags>
-```
-
-## Completion Report
-
-Report:
-
-- Douyin account name used
-- Number of images sent
-- Parsed title
-- Title and body lengths
-- Parsed tags
-- Topic count, which must not exceed 5
-- Douyin caption path used
-- Whether it was published or handed off in the open editor
-- Whether it was a dry run or a real upload
-- Any `sau` error message and suggested next step
+Report account, image count, independent title and length, body length, topics, caption path, mode, and result. When invoked by `just-write`, update state to `dry_run`, `published`, or `failed` only after the command finishes.

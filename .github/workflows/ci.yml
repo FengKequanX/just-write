@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - run: bun install --cwd plugins/just-write/skills/post-to-xhs/scripts --frozen-lockfile
+      - run: bun test
+      - run: bun run check:contracts
+      - run: bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts --help
+      - run: bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts --help
+
+  xhs-render-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - run: bun install --cwd plugins/just-write/skills/post-to-xhs/scripts --frozen-lockfile
+      - run: bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts README.md --out "$RUNNER_TEMP/xhs-smoke" --author 测试
+      - run: test -f "$RUNNER_TEMP/xhs-smoke/01-cover.png" && test -f "$RUNNER_TEMP/xhs-smoke/caption.md"

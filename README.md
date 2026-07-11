@@ -1,281 +1,235 @@
 # just-write
 
-> 那就开写吧——把你的想法变成可发布的文章。AI辅助但不代替，你的思路，你的表达。
+> 那就开写吧——把你的想法变成可发布的文章。AI 辅助但不代替：思路是你的，表达也是你的。
+
+Just Write 是面向 Claude Code 与 Codex 的中文内容创作插件。它保留严谨的公众号完整工作流，也允许直接润色、排版、生成小红书素材或同步抖音图文。
 
 ## 安装
 
 ### Codex App
 
-Codex App 目前不能在 Plugins 页面中直接搜索尚未添加的第三方 GitHub marketplace。
-
-推荐方式：打开 Codex App 中的任意本地线程，把下面这句话发送给 Codex：
+在任意本地任务中告诉 Codex：
 
 > 请从 GitHub marketplace `FengKequanX/just-write` 安装插件 `just-write@just-write-local`，并确认插件已启用。
 
-Codex 执行本地命令时可能会请求权限，确认即可。安装完成后新建一个线程，just-write 才会出现在新的会话中。
-
-手动安装：如果系统终端中可以使用 `codex` 命令，打开 PowerShell 或 Terminal，执行：
+也可以使用 Codex CLI：
 
 ```bash
 codex plugin marketplace add FengKequanX/just-write
 codex plugin add just-write@just-write-local
 ```
 
-如果提示找不到 `codex` 命令，请使用上面的 App 对话安装方式，或先按照 [Codex CLI 官方文档](https://developers.openai.com/codex/cli) 安装 CLI。
+安装或更新后新建一个任务，使新的 skills 生效。
 
-如果只执行了第一条命令，请重启 Codex App，然后打开 **Plugins**，选择 **Just Write Local**，再安装 **just-write**。
+### Claude Code
 
-更新插件时，也可以直接告诉 Codex：
-
-> 请更新 `just-write@just-write-local` 到 GitHub 上的最新版本，并确认插件已启用。
-
-或手动执行：
-
-```bash
-codex plugin marketplace upgrade just-write-local
-codex plugin remove just-write@just-write-local
-codex plugin add just-write@just-write-local
+```text
+/plugin marketplace add https://github.com/FengKequanX/just-write
+/plugin install just-write
 ```
 
-### Codex 本地开发
-
-克隆仓库后，在仓库根目录执行：
+### 本地开发
 
 ```bash
 codex plugin marketplace add .
 codex plugin add just-write@just-write-local
 ```
 
-修改插件源码后，执行以下命令刷新安装：
+## 使用方式
 
-```bash
-codex plugin remove just-write@just-write-local
-codex plugin add just-write@just-write-local
+自然描述目标即可：
+
+```text
+帮我写一篇关于 AI Agent 的公众号文章
+只润色这篇文章，不要进入发布流程
+把这篇 Markdown 排版并给出标题候选
+为这篇文章生成小红书轮播图素材
+先 dry-run 检查这组轮播图的抖音发布参数
+把排版稿保存到微信公众号草稿箱
 ```
 
-插件源文件位于 `plugins/just-write/`。安装或更新后请新建一个 Codex 线程，使新的 skills 生效。
+“写一篇文章”进入完整模式；意图明确的加工或发布请求直接进入对应能力，不再强制从选题重新开始。
 
-### Claude Code
+## 完整工作流
 
-```bash
-# 1. 添加市场
-/plugin marketplace add https://github.com/FengKequanX/just-write
-
-# 2. 安装插件
-/plugin install just-write
+```text
+选题讨论 → 内容生成 → 中文润色 → 排版与标题 → 配图确认 → 微信发布
 ```
 
-运行相关功能时，Agent 会按需安装脚本依赖。
+| 步骤 | 确认词 |
+|---|---|
+| 选题讨论 | `确认选题` |
+| 内容生成 | `确认内容` |
+| 润色 | `确认润色` |
+| 排版与标题 | `确认排版：X号` |
+| 微信发布 | `确认发布微信` |
+| 抖音真实上传 | `确认发布抖音` |
 
-## 前置条件
+微信公众号仍是完整模式的主发布链。微信成功后，可按配置继续生成小红书素材，再选择是否 dry-run 或发布抖音。小红书始终只生成素材，不会自动打开或控制创作者平台。
 
-| 依赖 | 说明 |
-|------|------|
-| **bun 或 npx** | 推荐安装 bun：`npm install -g bun`；已有 Node.js/npm 时也可通过 npx 运行 |
-| **WeChat API 凭证** | 用于公众号发布（不发布则不需要） |
-| **Chrome / Edge** | ≥ 112，用于浏览器发布和小红书图片渲染 |
-| **uv（可选）** | 用于安装 `social-auto-upload`，开启抖音图文自动发布 |
+## 文章目录与断点恢复
 
-## 配置公众号发布
+每篇文章使用独立目录：
 
-### 1. 获取 API 凭证
-
-登录 https://mp.weixin.qq.com → 开发 → 基本配置 → 复制 AppID 和 AppSecret
-
-### 2. 配置 IP 白名单
-
-同一个页面 → IP 白名单 → 添加当前 IP
-
-（API 发布时如果报 `40164: invalid ip`，回来这里添加新 IP 即可）
-
-### 3. 保存凭证
-
-在你使用 just-write 写文章的工作目录中创建 `.baoyu-skills/.env`：
-
+```text
+[文章标题]/
+├── [文章标题].md
+├── [文章标题]-formatted.md
+├── imgs/
+│   ├── cover.png              # 微信公众号封面
+│   └── cover-xhs.png          # 小红书轮播图封面
+├── xhs/
+│   ├── 01-cover.png
+│   ├── 02-content-*.png
+│   ├── NN-ending.png
+│   └── caption.md
+├── douyin/
+│   └── douyin-caption.md
+└── .just-write/
+    └── workflow.json
 ```
+
+`workflow.json` 记录阶段、锁定标题、产物相对路径和各平台状态，不保存正文、Cookie、AppSecret 等敏感信息。换任务或换 Agent 后，Just Write 会读取它继续工作；状态引用的文件缺失时会停止并报告漂移，不会猜测。
+
+文章标题原样用于原稿、排版稿、微信和小红书。抖音使用 `douyin-caption.md` 中的独立短标题，不会回写文章标题。
+
+封面约定固定为 `imgs/cover.png`（微信公众号）和 `imgs/cover-xhs.png`（小红书）。两个平台不会互相回退使用另一张封面；如果缺少各自封面，则使用该平台自己的无封面兜底逻辑。
+
+## 依赖
+
+| 依赖 | 用途 |
+|---|---|
+| Bun 或 Node.js/npm | 运行 TypeScript 脚本；无 Bun 时可用 `npx -y bun` |
+| Chrome / Edge ≥ 112 | 小红书渲染和浏览器发布 |
+| 微信公众号 API 凭证 | 使用公众号 API 保存草稿 |
+| uv（可选） | 安装 `social-auto-upload`，用于抖音自动上传 |
+
+## 微信公众号配置
+
+在文章工作目录创建 `.baoyu-skills/.env`：
+
+```dotenv
 WECHAT_APP_ID=你的AppID
 WECHAT_APP_SECRET=你的AppSecret
 ```
 
-### 4. （可选）偏好设置
-
-在同一工作目录中创建 `.baoyu-skills/baoyu-post-to-wechat/EXTEND.md`：
+可选配置 `.baoyu-skills/baoyu-post-to-wechat/EXTEND.md`：
 
 ```yaml
 default_theme: default
 default_color: blue
 default_publish_method: api
-default_author: 你的作者名
+default_author: 作者名
 need_open_comment: 1
 only_fans_can_comment: 0
 ```
 
-主题选项：`default` / `grace` / `simple` / `modern`
+API 报 `40164: invalid ip` 时，在微信公众平台的开发配置中更新 IP 白名单。
 
-## 配置小红书素材生成
+## 小红书素材配置
 
-### 1. （可选）偏好设置
-
-在文章工作目录中创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
+创建 `.baoyu-skills/post-to-xhs/EXTEND.md`：
 
 ```yaml
+enabled: true
 default_author: 作者名
 default_theme: default
 default_aspect: "3:4"
 default_topic_tags: AI观察,科技,编程
 ```
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `default_author` | — | 作者名，显示在封面和结尾页 |
-| `default_theme` | `default` | 主题样式，目前支持：`default`（Quiet Observer 暖色编辑风） |
-| `default_aspect` | `"3:4"` | 图片比例，可选：`3:4` / `9:16` / `1:1` / `4:3` |
-| `default_topic_tags` | — | 话题标签，逗号分隔 |
+只接受上面五个键。v1.3.0 不兼容旧的宽高比键和 dry-run 配置；发现已移除或未知键时会直接给出迁移错误。
 
-### 2. 图片生成说明
+CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目录配置。
 
-小红书内容以轮播图形式发布，脚本自动将 Markdown 文章渲染为 PNG 图片：
+独立生成命令：
 
-- **封面页** — 使用文章 frontmatter 中的 `coverImage`（兜底读取 `cover.png` 或 `imgs/cover.png`）+ 文章标题 + 作者。封面图放入 **4:3** 视觉框，前景图片完整显示、不裁切；非 4:3 图片使用同图柔和背景补足版面。
-- **内容页** — 按文章顺序连续排版，H2/H3 标题作为页内标题显示。分页基于浏览器真实布局测量，文字像正文阅读流一样连续铺排；当前页达到可用高度后再进入下一页，最后一页按剩余内容自然收尾。正文使用适合手机阅读的较大字号、紧凑行距和固定中英文小间距，避免两端对齐把空格拉散。
-- **图片处理** — 内容页图片放入统一正文宽度的白底图框，图片本体完整显示、不裁切。分页按图片真实尺寸和最终图框高度测量；当前页放不下整张图时，图片作为整体进入下一页，避免上一页空、下一页溢出。
-- **结尾页** — 感谢阅读 + 话题标签 + 作者
+```bash
+bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md" --out "[文章标题]/xhs"
+```
 
-渲染使用 Chrome/Edge 原生 `--headless=new` 截图（需 ≥ 112），无需 Playwright。
+渲染先写入临时目录，全部成功后才替换 `xhs/` 中受管的编号 PNG 和 `caption.md`，避免失败或页数变少时留下旧页面；无关文件不会被删除。
 
-生成的图片和文案保存在输出目录（`[文章标题]-xhs/`）。
+小红书默认读取文章目录内的 `imgs/cover-xhs.png`。如需显式覆盖，可在 frontmatter 使用 `xhsCoverImage`；不会读取公众号的 `imgs/cover.png`。
 
-### 3. 手动发布
+## 抖音同步配置
 
-图片生成后，打开 [小红书创作者平台](https://creator.xiaohongshu.com/publish/publish) 手动上传图片，从生成的 `caption.md` 复制完整标题和文案。
-
-just-write 不会打开或控制小红书创作者平台，也不会代替用户上传、填写或点击发布。文章最终标题一经确认，轮播图和 `caption.md` 会原样复用，不做平台化缩写。
-
-## 配置抖音自动发布
-
-抖音发布基于社区项目 [social-auto-upload](https://github.com/dreammis/social-auto-upload) 的浏览器自动化能力，将小红书轮播图目录同步发布为抖音图文。小红书仍保持手动发布。
-
-### 1. 安装上传工具
-
-推荐安装到文章项目的 `.baoyu-skills/` 目录，避免污染插件源码：
+抖音上传基于 [social-auto-upload](https://github.com/dreammis/social-auto-upload)。建议安装到文章项目的 `.baoyu-skills/`：
 
 ```powershell
-mkdir .baoyu-skills
 git clone https://github.com/dreammis/social-auto-upload.git .baoyu-skills/social-auto-upload
 cd .baoyu-skills/social-auto-upload
 uv venv
 uv pip install -e .
 copy conf.example.py conf.py
 .venv\Scripts\patchright.exe install chromium
-```
-
-如果 `patchright install chromium` 使用镜像源失败，可直接使用默认官方下载源重试。
-
-### 2. 登录抖音账号
-
-```powershell
-cd .baoyu-skills/social-auto-upload
 .venv\Scripts\sau.exe douyin login --account creator
-.venv\Scripts\sau.exe douyin check --account creator
 ```
 
-`creator` 是本地账号别名，可替换为任意名称。
+可选配置 `.baoyu-skills/sync-to-douyin/EXTEND.md`：
 
-### 3. 发布抖音图文
+```yaml
+enabled: true
+default_account: creator
+```
 
-先用 `post-to-xhs` 生成小红书轮播图目录，然后把该目录交给 `sync-to-douyin`：
+`enabled` 只控制完整工作流是否主动询问抖音同步，不能绕过真实发布确认。
+
+每篇文章必须单独准备 `douyin/douyin-caption.md`：
+
+```markdown
+抖音独立标题
+
+正文
+
+#话题1 #话题2
+
+— 发布建议：确认音乐和发布时间。
+```
+
+抖音标题不超过 20 字，正文不超过 1,000 字，话题不超过 5 个且话题内部不能有空格。
 
 ```powershell
-bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator
+# 只校验，不发布
+bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]/xhs" --account creator --dry-run
+
+# 用户明确确认后发布
+bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]/xhs" --account creator
 ```
 
-脚本会自动读取目录内的 `*.png` 和 `caption.md`，用第一行作为标题，提取 `#话题` 作为抖音标签，并调用 `sau douyin upload-note` 发布图文。
+## 配置优先级
 
-安全起见，首次使用可以先 dry-run：
+各能力独立保存配置，并使用统一优先级：
 
-```powershell
-bun plugins/just-write/skills/sync-to-douyin/scripts/douyin-note.ts "[文章标题]-xhs" --account creator --dry-run
+```text
+CLI 参数 > 项目 .baoyu-skills/<skill>/EXTEND.md > XDG 配置 > 用户目录配置 > 默认值
 ```
 
-## 文章目录结构
+## 开发与验证
 
-每篇文章独立文件夹管理：
-
-```
-[文章标题]/
-├── [文章标题].md              # 润色后的文章
-├── [文章标题]-formatted.md    # 排版优化后的最终版本（用于发布）
-└── imgs/                     # 该文章的所有图片和封面
+```bash
+bun run setup
+bun test
+bun run check:contracts
 ```
 
-排版优化阶段确认最终标题后，文章文件夹和同名 Markdown 文件会同步改为最终标题名称；`imgs/` 目录保持不变。
-
-生成截图来源清单时，优先使用官方公告、原始论文、产品文档、公司博客、财报/监管文件、当事人社交媒体等第一方来源。
-
-## 使用
-
-直接告诉 Claude Code 或 Codex：
-
-> 帮我写一篇关于DeepSeek V4的公众号文章
-
-Claude Code 也可以使用 slash 命令：
-
-```
-/just-write:start-jw 想写什么
-```
-
-## 设计哲学
-
-**AI是拐杖不是腿。** 每一步都等你确认——选题你定，内容可反复修正，标题你选——AI助你落地想法，你才是作者。
-
-## 工作流
-
-```
-选题讨论 → 内容生成 → AI去痕润色 → 排版优化(含标题生成) → 配图 → 发布
-```
-
-每一步都有检查点，确认后才进入下一步：
-
-| 步骤 | 确认词 |
-|------|--------|
-| 选题讨论 | 确认选题 |
-| 内容生成 | 确认内容 |
-| 润色 | 确认润色 |
-| 排版优化 | 确认排版：X号 |
-| 配图与发布 | 确认发布 |
-
-当前支持：**微信公众号发布**、**小红书素材生成**、**抖音图文自动发布**。
-
-## v1.2.0
-
-- 新增 `sync-to-douyin` skill，可将小红书轮播图目录自动发布为抖音图文。
-- 接入 `social-auto-upload` 的 `sau douyin upload-note` 命令，支持账号别名、dry-run、标题/正文/标签解析。
-- 明确发布边界：小红书仍只生成素材并手动发布，抖音可在用户确认后自动发布。
-
-## v1.1.0
-
-- 新增 Codex 插件清单和仓库级 marketplace，可通过 Codex CLI 安装。
-- 调整为 `plugins/just-write/` 标准插件目录，同时兼容 Claude Code 和 Codex。
-- 将工作流中的专用工具调用改为跨 Agent 的 companion skill 表述。
-- 修正 skills frontmatter，使全部 6 个 skills 通过 Codex 校验。
-- 更新 `update.sh`，让上游技能同步继续写入新的插件目录。
-
-## 内置技能
-
-| 技能 | 上游 | 用途 |
-|------|------|------|
-| brainstorming | 改造自 [obra/superpowers](https://github.com/obra/superpowers) | 选题讨论 |
-| humanizer-zh | [op7418/Humanizer-zh](https://github.com/op7418/Humanizer-zh) | 去 AI 写作痕迹 |
-| baoyu-format-markdown | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 排版优化 + 标题生成 + CJK 排版 |
-| baoyu-post-to-wechat | [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills) | 微信公众号发布 |
-| post-to-xhs | 内置 | 小红书轮播图与文案素材生成 |
-| sync-to-douyin | 内置，基于 [social-auto-upload](https://github.com/dreammis/social-auto-upload) | 抖音图文自动发布 |
-
-## 开发者：同步上游技能
+同步上游 companion skills：
 
 ```bash
 bash update.sh
 ```
+
+## 内置能力
+
+| Skill | 用途 |
+|---|---|
+| `just-write` | 意图路由、完整流程和断点状态 |
+| `brainstorming` | 选题讨论 |
+| `humanizer-zh` | 中文去 AI 痕迹 |
+| `baoyu-format-markdown` | 标题生成和 Markdown 排版 |
+| `baoyu-post-to-wechat` | 微信公众号草稿发布 |
+| `post-to-xhs` | 小红书轮播图与文案素材 |
+| `sync-to-douyin` | 抖音图文校验与上传 |
 
 ## License
 

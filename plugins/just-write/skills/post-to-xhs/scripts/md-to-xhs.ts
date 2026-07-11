@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
 import { marked, type Token } from 'marked';
+import { loadXhsConfig, validateXhsOptions, type XhsConfig } from './xhs-config';
 
 // --- Types ---
 
@@ -292,13 +293,10 @@ function addImageDimensions(html: string, baseDir: string): string {
   });
 }
 
-function resolveCoverImage(fm: Frontmatter, baseDir: string): string {
+export function resolveCoverImage(fm: Frontmatter, baseDir: string): string {
   const candidates = [
-    fm.coverImage,
-    fm.cover,
-    fm.image,
-    'cover.png',
-    path.join('imgs', 'cover.png'),
+    fm.xhsCoverImage,
+    path.join('imgs', 'cover-xhs.png'),
   ].filter((value): value is string => Boolean(value));
 
   for (const candidate of candidates) {
@@ -628,7 +626,7 @@ function pageNumHtml(current: number, total: number): string {
   return '';
 }
 
-function buildCoverHtml(
+export function buildCoverHtml(
   title: string,
   coverImage: string,
   coverAspectRatio: string,
@@ -642,7 +640,7 @@ function buildCoverHtml(
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
-<body class="cover" style="${dims}">
+<body class="cover${coverImage ? '' : ' cover--text-only'}" style="${dims}">
   <div class="cover-content">
     ${coverImage ? `<div class="cover-image" style="--cover-source-ratio:${escapeHtml(coverAspectRatio)}"><img class="cover-image-bg" src="${escapeHtml(coverImage)}" alt="" aria-hidden="true"><img class="cover-image-fg" src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
     <div class="title-area">
@@ -958,7 +956,7 @@ async function measureContentPagesWithChrome(
   }
 }
 
-function buildEndingHtml(
+export function buildEndingHtml(
   tags: string[],
   author: string,
   css: string,
@@ -976,6 +974,9 @@ function buildEndingHtml(
     </div>`
     : '';
 
+  const authorName = author && author !== '作者名' ? author : '';
+  const followText = authorName ? `关注${escapeHtml(authorName)}，期待下次见。` : '感谢阅读，期待下次见。';
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
@@ -990,7 +991,7 @@ function buildEndingHtml(
       <span>感谢</span>
       <span class="cta-accent">阅读。</span>
     </div>
-    <div class="cta-sub">关注炙青，一起观察 AI 与科技产品的流动与澎湃。</div>
+    <div class="cta-sub">${followText}</div>
     <div class="ending-rule"></div>
     <div class="ending-meta${tagHtml ? '' : ' ending-meta--author-only'}">
       ${tagsSection}
@@ -1096,14 +1097,14 @@ function extractContentTags(body: string): string[] {
 
 // --- Main Render ---
 
-interface RenderResult {
+export interface RenderResult {
   images: string[];
   captionPath: string;
   title: string;
   totalPages: number;
 }
 
-async function render(
+export async function render(
   markdownPath: string,
   outDir: string,
   theme: string,
@@ -1216,6 +1217,30 @@ async function render(
   return { images, captionPath, title, totalPages };
 }
 
+const GENERATED_XHS_FILE = /^(?:\d{2,}-.*\.png|caption\.md)$/i;
+
+export function commitGeneratedOutput(
+  result: RenderResult,
+  stagingDir: string,
+  outputDir: string,
+): RenderResult {
+  fs.mkdirSync(outputDir, { recursive: true });
+  for (const name of fs.readdirSync(outputDir)) {
+    if (GENERATED_XHS_FILE.test(name)) fs.unlinkSync(path.join(outputDir, name));
+  }
+  const moved: string[] = [];
+  for (const source of [...result.images, result.captionPath]) {
+    const target = path.join(outputDir, path.basename(source));
+    fs.renameSync(source, target);
+    if (target.toLowerCase().endsWith('.png')) moved.push(target);
+  }
+  return {
+    ...result,
+    images: moved,
+    captionPath: path.join(outputDir, 'caption.md'),
+  };
+}
+
 // --- CLI ---
 
 function printUsage(): never {
@@ -1225,7 +1250,7 @@ Usage:
   bun md-to-xhs.ts <markdown-file> [options]
 
 Options:
-  --out <dir>       Output directory (default: <article>-xhs/)
+  --out <dir>       Output directory (default: <article-dir>/xhs/)
   --theme <name>    Theme name (default: default)
   --aspect <ratio>  Aspect ratio: 3:4 | 9:16 | 1:1 | 4:3 (default: 3:4)
   --author <name>   Author name
@@ -1247,35 +1272,44 @@ Example:
   process.exit(0);
 }
 
+export interface XhsCliOptions {
+  markdownPath?: string;
+  outDir?: string;
+  theme: string;
+  aspect: string;
+  author: string;
+  tags: string;
+}
+
+export function parseXhsArgs(args: string[], defaults: XhsConfig): XhsCliOptions {
+  const options: XhsCliOptions = {
+    theme: defaults.default_theme,
+    aspect: defaults.default_aspect,
+    author: defaults.default_author,
+    tags: defaults.default_topic_tags,
+  };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--out' && args[i + 1]) options.outDir = args[++i];
+    else if (arg === '--theme' && args[i + 1]) options.theme = args[++i]!;
+    else if (arg === '--aspect' && args[i + 1]) options.aspect = args[++i]!;
+    else if (arg === '--author' && args[i + 1]) options.author = args[++i]!;
+    else if (arg === '--tags' && args[i + 1]) options.tags = args[++i]!;
+    else if (!arg.startsWith('-') && !options.markdownPath) options.markdownPath = arg;
+    else throw new Error(`Unknown or incomplete argument: ${arg}`);
+  }
+  return options;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     printUsage();
   }
 
-  let markdownPath: string | undefined;
-  let outDir: string | undefined;
-  let theme = 'default';
-  let aspect = DEFAULT_ASPECT;
-  let author = '';
-  let tags = '';
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
-    if (arg === '--out' && args[i + 1]) {
-      outDir = args[++i];
-    } else if (arg === '--theme' && args[i + 1]) {
-      theme = args[++i];
-    } else if (arg === '--aspect' && args[i + 1]) {
-      aspect = args[++i];
-    } else if (arg === '--author' && args[i + 1]) {
-      author = args[++i];
-    } else if (arg === '--tags' && args[i + 1]) {
-      tags = args[++i];
-    } else if (!arg.startsWith('-')) {
-      markdownPath = arg;
-    }
-  }
+  const loadedConfig = loadXhsConfig();
+  const options = parseXhsArgs(args, loadedConfig.config);
+  let { markdownPath, outDir } = options;
 
   if (!markdownPath) {
     console.error('Error: Markdown file path is required');
@@ -1288,14 +1322,32 @@ async function main(): Promise<void> {
   }
 
   if (!outDir) {
-    const base = path.basename(markdownPath, path.extname(markdownPath));
-    outDir = path.join(path.dirname(path.resolve(markdownPath)), `${base}-xhs`);
+    outDir = path.join(path.dirname(path.resolve(markdownPath)), 'xhs');
   }
 
-  console.log(`[md-to-xhs] Rendering: ${markdownPath}`);
-  console.log(`[md-to-xhs] Theme: ${theme} · Aspect: ${aspect} · Output: ${outDir}`);
+  const themesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'themes');
+  validateXhsOptions(options.theme, options.aspect, themesDir);
 
-  const result = await render(markdownPath, outDir, theme, aspect, author, tags);
+  console.log(`[md-to-xhs] Rendering: ${markdownPath}`);
+  console.log(`[md-to-xhs] Config: ${loadedConfig.source}`);
+  console.log(`[md-to-xhs] Theme: ${options.theme} · Aspect: ${options.aspect} · Output: ${outDir}`);
+
+  const stagingDir = `${path.resolve(outDir)}.tmp-${process.pid}-${Date.now()}`;
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  let result: RenderResult;
+  try {
+    const staged = await render(
+      markdownPath,
+      stagingDir,
+      options.theme,
+      options.aspect,
+      options.author,
+      options.tags,
+    );
+    result = commitGeneratedOutput(staged, stagingDir, path.resolve(outDir));
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+  }
 
   console.log(`\n[md-to-xhs] Done! ${result.totalPages} pages generated:`);
   for (const img of result.images) {
@@ -1306,7 +1358,9 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(result, null, 2));
 }
 
-await main().catch((error: unknown) => {
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  await main().catch((error: unknown) => {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

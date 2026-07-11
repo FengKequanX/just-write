@@ -1,8 +1,9 @@
 {
   "name": "sync-to-douyin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "upload": "bun douyin-note.ts"
+    "upload": "bun douyin-note.ts",
+    "test": "bun test"
   }
 }

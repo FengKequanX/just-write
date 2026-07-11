@@ -1,9 +1,10 @@
 {
   "name": "post-to-xhs",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "render": "bun md-to-xhs.ts"
+    "render": "bun md-to-xhs.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "marked": "^15.0.0"

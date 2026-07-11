@@ -1,7 +1,7 @@
 {
   "name": "just-write",
-  "version": "1.2.0",
-  "description": "那就开写吧：把想法变成可发布的微信公众号文章，并支持润色、排版、小红书素材生成与抖音图文发布。",
+  "version": "1.3.0",
+  "description": "中文内容创作、断点续写、排版、小红书素材与微信/抖音发布工作流。",
   "author": {
     "name": "炙青",
     "url": "https://github.com/FengKequanX"
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "Just Write",
     "shortDescription": "公众号写作、排版、小红书素材与抖音图文发布工作流",
-    "longDescription": "从选题讨论开始，经过内容生成、中文去 AI 味、Markdown 排版、配图确认，最终发布到微信公众号，也可生成小红书轮播图并同步发布抖音图文。",
+    "longDescription": "支持公众号六阶段完整写作，也可直接润色、排版、生成小红书轮播图或同步抖音图文，并通过文章状态文件跨任务恢复。",
     "developerName": "炙青",
     "category": "Productivity",
     "capabilities": [

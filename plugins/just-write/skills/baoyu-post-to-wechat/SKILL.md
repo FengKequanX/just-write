@@ -381,7 +381,7 @@ API发布失败：IP不在白名单内。
 4. **Cover Image Check** (required for API `article_type=news`):
    1. Use CLI `--cover` if provided.
    2. Else use frontmatter (`coverImage`, `featureImage`, `cover`, `image`).
-   3. Else check article directory default path: `imgs/cover.png`.
+   3. Else check article directory default path: `imgs/cover.png`; never use `imgs/cover-xhs.png`.
    4. Else fallback to first inline content image.
    5. If still missing, stop and request a cover image before publishing.
 

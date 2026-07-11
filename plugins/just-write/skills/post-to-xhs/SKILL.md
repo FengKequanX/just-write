@@ -1,192 +1,60 @@
 ---
 name: post-to-xhs
-description: >
-  将 Markdown 文章渲染为小红书风格轮播图 PNG。
-  当用户提到"发小红书"、"小红书发布"、"同步小红书"、"XHS发布"、
-  "post to xhs"时使用。
-metadata:
-  version: 1.0.3
-  openclaw:
-    homepage: https://github.com/FengKequanX/just-write#post-to-xhs
-    requires:
-      anyBins:
-        - bun
-        - npx
+description: Render a locked-title Markdown article into Xiaohongshu carousel PNG images and caption.md. Use when the user asks to prepare, generate, sync, or post Xiaohongshu/XHS content; this skill creates materials only and never controls or publishes through the creator platform.
 ---
 
-# Post to Xiaohongshu (小红书)
+# Generate Xiaohongshu Materials
 
-将 Markdown 文章渲染为小红书风格轮播图 PNG，生成文案（caption.md），用户手动上传到小红书创作者平台。
+Render a formatted Markdown article into `<article-dir>/xhs/` with a cover, paginated content images, an ending image, and `caption.md`.
 
-## MANDATORY Boundaries
+## Boundaries
 
-1. **只生成素材。** 本 skill 的终点是轮播图 PNG 和 `caption.md` 落盘。
-2. **禁止自动发布。** 不得打开或控制小红书创作者平台，不得上传图片、填写标题或正文、点击发布，也不得调用任何发布脚本或浏览器自动化作为后续步骤。
-3. **最终标题原样复用。** `caption.md` 第一行、封面页标题必须完整使用 Markdown frontmatter 中已经确认的最终标题，不得因 20 字限制、点击率、平台风格或 SEO 自动缩写、改写或另拟标题。若平台提示超长，只在完成报告中提醒用户手动处理，不改文件。
-4. 用户说“发小红书”“同步小红书”时，在 just-write 工作流中一律解释为“生成可供手动发布的小红书素材”。
+- Generate local materials only. Never open or control Xiaohongshu, upload files, fill forms, or publish.
+- Require a locked article title before rendering. Reuse it verbatim in the cover and `caption.md`; do not shorten it for platform limits.
+- Use the formatted article as input and preserve inline image order.
+- Resolve the cover from frontmatter `xhsCoverImage`, then `imgs/cover-xhs.png`. Never fall back to the WeChat cover `imgs/cover.png`.
 
-## Language
+## Configuration
 
-**Match user's language**: Respond in the same language the user uses.
+Load the first existing `EXTEND.md` in this order:
 
-## Script Directory
+1. `<cwd>/.baoyu-skills/post-to-xhs/EXTEND.md`
+2. `$XDG_CONFIG_HOME/baoyu-skills/post-to-xhs/EXTEND.md`
+3. `~/.baoyu-skills/post-to-xhs/EXTEND.md`
 
-**Agent Execution**: Determine this SKILL.md directory as `{baseDir}`, then use `{baseDir}/scripts/<name>.ts`. Resolve `${BUN_X}` runtime: if `bun` installed → `bun`; if `npx` available → `npx -y bun`; else suggest installing bun.
+Only these keys are valid:
 
-| Script | Purpose |
-|--------|----------|
-| `scripts/md-to-xhs.ts` | Markdown → 小红书轮播图 PNG (Chrome headless) |
-
-## Rendering Backend
-
-Uses Chrome/Edge native `--headless=new --screenshot` for reliable cross-platform rendering. No Playwright dependency.
-
-**Chrome discovery** (resolution order):
-1. `CHROME_PATH` env var
-2. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` env var
-3. Platform defaults: Windows (`chrome.exe` / `msedge.exe`), macOS (`Google Chrome.app`), Linux (`/usr/bin/google-chrome`)
-
-If Chrome/Edge is not found, the script errors with install instructions. Set `CHROME_PATH` to override.
-
-## Mobile-First Carousel Layout
-
-The renderer keeps the article in reading order and packs content by visual height instead of forcing every H2 section onto a separate page.
-
-| Page | Design |
-|------|--------|
-| Cover | Uses `coverImage` from frontmatter, then title and author. The cover image keeps its real aspect ratio and is never cropped; 4:3 is recommended for stronger Xiaohongshu first-screen presence. No summary text is rendered on the cover. |
-| Content | Clean editorial style: warm background, serif body text, subtle accent marks, highlighted emphasis, fixed-width image frames, and no decorative page numbers. H2/H3 headings stay inline with the prose. Pages flow in article order, use browser-measured pagination, mobile-friendly typography, compact line spacing, and fixed narrow gaps around mixed Chinese/Latin text. |
-| Ending | CTA, hashtags, and author. |
-
-## Preferences (EXTEND.md)
-
-Check EXTEND.md existence (priority order):
-
-```bash
-# macOS, Linux, WSL, Git Bash
-test -f .baoyu-skills/post-to-xhs/EXTEND.md && echo "project"
-test -f "${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/post-to-xhs/EXTEND.md" && echo "xdg"
-test -f "$HOME/.baoyu-skills/post-to-xhs/EXTEND.md" && echo "user"
-```
-
-| Path | Location |
-|------|----------|
-| `.baoyu-skills/post-to-xhs/EXTEND.md` | Project directory |
-| `${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/post-to-xhs/EXTEND.md` | XDG |
-| `$HOME/.baoyu-skills/post-to-xhs/EXTEND.md` | User home |
-
-**EXTEND.md example**:
-
-```md
+```yaml
+enabled: false
 default_author: 作者名
 default_theme: default
-default_aspect: 3:4
+default_aspect: "3:4"
 default_topic_tags: AI观察,科技,编程
 ```
 
-**Theme options**: `default` (dark gradient cover, content-aware layouts, dark ending)
+`default_aspect_ratio` and `dry_run` were removed and must produce a migration error. CLI arguments override configuration. Supported aspects are `3:4`, `9:16`, `1:1`, and `4:3`; the only bundled theme is `default`.
 
-**Aspect ratio options**: `3:4` (1080×1440, default) / `9:16` / `1:1` / `4:3`
+## Run
 
-## Workflow
-
-```
-XHS Rendering Progress:
-- [ ] Step 0: Load preferences (EXTEND.md)
-- [ ] Step 1: Render markdown to carousel images
-- [ ] Step 2: Report completion
-```
-
-### Step 0: Load Preferences
-
-Check and load EXTEND.md settings. If not found, use defaults.
-
-Resolve defaults:
-- `default_author` (from EXTEND.md or prompt)
-- `default_theme` (default `default`)
-- `default_aspect` (default `3:4`)
-- `default_topic_tags` (comma-separated hashtags)
-
-### Step 1: Render Markdown to Carousel Images
+Resolve Bun as `bun`, or use `npx -y bun` when Bun is unavailable. Then run:
 
 ```bash
-${BUN_X} {baseDir}/scripts/md-to-xhs.ts <markdown-file> --out <output-dir> [--theme default] [--aspect 3:4] [--author 作者名] [--tags "tag1,tag2"]
+bun <this-skill>/scripts/md-to-xhs.ts <article-dir>/<title>-formatted.md --out <article-dir>/xhs
 ```
 
-**Parameters**:
+Optional arguments: `--theme`, `--aspect`, `--author`, and `--tags`.
 
-| Parameter | Description |
-|-----------|-------------|
-| `<markdown-file>` | Input markdown file (positional, required) |
-| `--out <dir>` | Output directory (default: `<article-dir>/<filename>-xhs/`) |
-| `--theme <name>` | Theme name (default: `default`) |
-| `--aspect <ratio>` | Aspect ratio: `3:4` / `9:16` / `1:1` / `4:3` (default `3:4`) |
-| `--author <name>` | Author name for cover/ending |
-| `--tags <tags>` | Comma-separated topic tags for ending page |
+The renderer reads configuration itself, validates all options, renders into a staging directory, and replaces only managed numbered PNG files plus `caption.md` after success. Unrelated files in `xhs/` remain untouched.
 
-**Rendering rules**:
-- Frontmatter title → Cover page title
-- Frontmatter `coverImage` → Cover page image; fallback to `cover.png` or `imgs/cover.png`; placed in a 4:3 visual frame, with the foreground image rendered complete without cropping and a soft same-image background for non-4:3 covers
-- Frontmatter description/summary → Caption text only, not cover text
-- H2 headings → Inline content headings, not forced page breaks
-- Content overflow → Auto-split sequentially using browser-measured layout height; prose paragraphs can continue across pages like article text, while images stay as whole blocks and move to the next page when they do not fit at their rendered frame size; the final page keeps the remaining content naturally
-- Inline images → Rendered inside unified-width white image frames; the image itself is shown complete without cropping
-- Ending page → CTA + hashtags + author
+## Expected output
 
-**Output structure**:
-
-```
-<output-dir>/
+```text
+xhs/
 ├── 01-cover.png
-├── 02-content-<slug>.png
-├── 03-content-<slug>.png
+├── 02-content-*.png
 ├── ...
 ├── NN-ending.png
 └── caption.md
 ```
 
-### Step 2: Completion Report
-
-```
-Xiaohongshu Images Generated!
-
-Input: [markdown-file]
-Theme: [theme] · Aspect: [ratio]
-
-Images: [N] total
-- 01-cover.png ✓ Cover (cover image + title + author)
-- 02-content-[slug].png ✓ Content
-- ...
-- NN-ending.png ✓ Ending
-
-Caption: [output-dir]/caption.md
-• Title: [title]
-• Hashtags: [tags]
-
-Next step:
-→ 素材已准备好，请用户自行打开小红书创作者平台手动上传
-→ https://creator.xiaohongshu.com/publish/publish
-```
-
-## Integration with just-write
-
-When used as part of the just-write plugin, this skill triggers after WeChat publishing.
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Chrome/Edge not found | Install Google Chrome or Microsoft Edge, or set `CHROME_PATH` env var |
-| Rendering fails | Check Chrome version ≥ 112 (required for `--headless=new`) |
-| Chinese path errors | Script uses ASCII temp path internally; should work for all paths |
-| Content overflow | Auto-split by browser-measured layout; check whether unusually tall source images need shorter surrounding text |
-| Title too long | Full title is written to `caption.md`; adjust manually only if the target platform rejects the length |
-
-## Prerequisites
-
-- `bun` runtime (or `npx`)
-- Google Chrome or Microsoft Edge (≥ 112 for headless screenshots)
-
-## Extension Support
-
-Custom configurations via EXTEND.md. See **Preferences** section for paths and supported options.
+Report the input, configuration source, aspect, image count, exact output paths, title, and topics. End by telling the user to upload the materials manually. When invoked by `just-write`, update XHS workflow status to `generated` only after the renderer succeeds.

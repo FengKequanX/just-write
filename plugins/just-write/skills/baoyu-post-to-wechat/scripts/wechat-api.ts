@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadWechatExtendConfig, resolveAccount, loadCredentials } from "./wechat-extend-config.ts";
+import { resolveWechatCoverPath } from "./wechat-cover.ts";
 import {
   type WechatUploadAsset,
   prepareWechatBodyImageUpload,
@@ -711,6 +712,16 @@ async function main(): Promise<void> {
 
   if (!author && resolved.default_author) author = resolved.default_author;
 
+  const rawCoverPath = args.cover ||
+    frontmatter.coverImage ||
+    frontmatter.featureImage ||
+    frontmatter.cover ||
+    frontmatter.image;
+  const explicitCoverPath = rawCoverPath && !path.isAbsolute(rawCoverPath) && args.cover
+    ? path.resolve(process.cwd(), rawCoverPath)
+    : rawCoverPath;
+  const coverPath = resolveWechatCoverPath(explicitCoverPath, baseDir);
+
   if (args.dryRun) {
     console.log(JSON.stringify({
       articleType: args.articleType,
@@ -720,6 +731,7 @@ async function main(): Promise<void> {
       htmlPath,
       contentLength: htmlContent.length,
       placeholderImageCount: contentImages.length || undefined,
+      coverPath,
       account: resolved.alias || undefined,
     }, null, 2));
     return;
@@ -733,14 +745,6 @@ async function main(): Promise<void> {
   console.error("[wechat-api] Fetching access token...");
   const accessToken = await fetchAccessToken(creds.appId, creds.appSecret);
 
-  const rawCoverPath = args.cover ||
-    frontmatter.coverImage ||
-    frontmatter.featureImage ||
-    frontmatter.cover ||
-    frontmatter.image;
-  const coverPath = rawCoverPath && !path.isAbsolute(rawCoverPath) && args.cover
-    ? path.resolve(process.cwd(), rawCoverPath)
-    : rawCoverPath;
   const needNewsCoverFallback = args.articleType === "news" && !coverPath;
 
   console.error("[wechat-api] Uploading body images...");

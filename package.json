@@ -1,0 +1,9 @@
+{
+  "name": "just-write-workspace",
+  "private": true,
+  "scripts": {
+    "setup": "bun install --cwd plugins/just-write/skills/post-to-xhs/scripts",
+    "test": "bun test plugins/just-write/skills/just-write/scripts plugins/just-write/skills/post-to-xhs/scripts plugins/just-write/skills/sync-to-douyin/scripts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-extend-config.test.ts",
+    "check:contracts": "bun scripts/check-contracts.ts"
+  }
+}
