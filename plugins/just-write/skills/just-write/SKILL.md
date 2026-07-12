@@ -14,7 +14,7 @@ Choose exactly one mode before acting:
 | Mode | Trigger | Entry behavior |
 |---|---|---|
 | `full` | Write an article from an idea or topic | Run the six-step workflow below |
-| `polish` | Polish, rewrite, or remove AI tone from existing content | Load `humanizer-zh` directly |
+| `polish` | Polish, rewrite, remove AI tone, or match the author's voice | Load `humanizer-zh`, then `writing-style` |
 | `format` | Format Markdown or generate title candidates | Load `baoyu-format-markdown` directly |
 | `wechat_publish` | Publish an existing article to WeChat | Start from asset checks and WeChat confirmation |
 | `xhs_materials` | Generate Xiaohongshu images or caption | Load `post-to-xhs`; never publish |
@@ -67,8 +67,8 @@ Managed layout:
 Prefix every full-mode response with the current label. Stop at each checkpoint until the exact confirmation is received.
 
 1. `[Step 1: 选题讨论]` — Load `brainstorming`; confirm with `确认选题`.
-2. `[Step 2: 内容生成]` — Draft into the article directory. Put factual image placeholders inline as `![描述](imgs/name.png)`. On `确认内容`, immediately list first-party screenshot sources.
-3. `[Step 3: 润色]` — Load `humanizer-zh`; confirm with `确认润色`.
+2. `[Step 2: 内容生成]` — Load `writing-style`, build its material card, choose an article archetype, and draft into the article directory. Put factual image placeholders inline as `![描述](imgs/name.png)`. On `确认内容`, immediately list first-party screenshot sources.
+3. `[Step 3: 润色]` — Load `humanizer-zh` to remove generic AI patterns, then load `writing-style` to restore the project voice and run its four-layer audit; confirm with `确认润色`.
 4. `[Step 4: 排版优化]` — Load `baoyu-format-markdown`, produce 4–5 title candidates and `<title>-formatted.md`; confirm with `确认排版：X号`.
 5. `[Step 5: 配图与发布确认]` — Lock the chosen article title, rename the directory and same-name Markdown files without overwriting, verify `imgs/cover.png` and any inline images, and confirm WeChat with `确认发布微信`.
 6. `[Step 6: 发布]` — Load `baoyu-post-to-wechat`. After a successful WeChat draft, optionally offer Xiaohongshu materials when its config has `enabled: true`, then optionally offer Douyin.
@@ -77,7 +77,7 @@ If a rename target exists, stop without overwriting. Remove only illegal path ch
 
 ## Direct modes
 
-- `polish`: operate on the supplied file/content, write the requested result, update state, and report the artifact. Do not ask for topic or publishing confirmation.
+- `polish`: load `humanizer-zh`, then `writing-style`; operate on the supplied file/content, write the requested result, update state, and report the artifact. Do not ask for topic or publishing confirmation.
 - `format`: format and produce title candidates. Require title confirmation only if the user asks to generate platform assets afterward.
 - `wechat_publish`: require a formatted article, locked article title, cover/body assets, and `确认发布微信`; then load `baoyu-post-to-wechat`.
 - `xhs_materials`: require a formatted article, locked article title, and `imgs/cover-xhs.png` when a custom cover is expected; render into `<article-dir>/xhs`, update XHS status to `generated`, and stop with local paths.

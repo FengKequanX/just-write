@@ -1,6 +1,6 @@
 {
   "name": "just-write",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "中文内容创作、断点续写、排版、小红书素材与微信/抖音发布工作流。",
   "author": {
     "name": "炙青",
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "Just Write",
     "shortDescription": "公众号写作、排版、小红书素材与抖音图文发布工作流",
-    "longDescription": "支持公众号六阶段完整写作，也可直接润色、排版、生成小红书轮播图或同步抖音图文，并通过文章状态文件跨任务恢复。",
+    "longDescription": "支持项目个人文风、公众号六阶段完整写作、直接润色排版、小红书轮播图和抖音图文，并通过文章状态文件跨任务恢复。",
     "developerName": "炙青",
     "category": "Productivity",
     "capabilities": [

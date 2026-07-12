@@ -12,16 +12,19 @@ function assert(condition: unknown, message: string): asserts condition {
 const claude = json('plugins/just-write/.claude-plugin/plugin.json');
 const codex = json('plugins/just-write/.codex-plugin/plugin.json');
 const marketplace = json('.claude-plugin/marketplace.json') as { plugins?: Array<{ version?: string }> };
-assert(claude.version === '1.3.0', 'Claude plugin version must be 1.3.0');
-assert(codex.version === '1.3.0', 'Codex plugin version must be 1.3.0');
-assert(marketplace.plugins?.[0]?.version === '1.3.0', 'Marketplace version must match plugin version');
+assert(claude.version === '1.4.0', 'Claude plugin version must be 1.4.0');
+assert(codex.version === '1.4.0', 'Codex plugin version must be 1.4.0');
+assert(marketplace.plugins?.[0]?.version === '1.4.0', 'Marketplace version must match plugin version');
 
 const mainSkill = read('plugins/just-write/skills/just-write/SKILL.md');
 for (const mode of ['full', 'polish', 'format', 'wechat_publish', 'xhs_materials', 'douyin_sync']) {
   assert(mainSkill.includes(`\`${mode}\``), `Main skill is missing mode ${mode}`);
 }
-for (const skill of ['brainstorming', 'humanizer-zh', 'baoyu-format-markdown', 'baoyu-post-to-wechat', 'post-to-xhs', 'sync-to-douyin']) {
+for (const skill of ['brainstorming', 'humanizer-zh', 'writing-style', 'baoyu-format-markdown', 'baoyu-post-to-wechat', 'post-to-xhs', 'sync-to-douyin']) {
   assert(fs.existsSync(path.join(root, 'plugins', 'just-write', 'skills', skill, 'SKILL.md')), `Missing companion skill ${skill}`);
+}
+for (const reference of ['article-archetypes.md', 'quality-check.md', 'style-profile-template.md']) {
+  assert(fs.existsSync(path.join(root, 'plugins', 'just-write', 'skills', 'writing-style', 'references', reference)), `Missing writing-style reference ${reference}`);
 }
 
 const combinedDocs = [mainSkill, read('plugins/just-write/skills/post-to-xhs/SKILL.md'), read('plugins/just-write/skills/sync-to-douyin/SKILL.md'), read('README.md')].join('\n');
@@ -35,5 +38,6 @@ const wechatCover = read('plugins/just-write/skills/baoyu-post-to-wechat/scripts
 assert(xhsRenderer.includes("path.join('imgs', 'cover-xhs.png')"), 'XHS conventional cover must be imgs/cover-xhs.png');
 assert(wechatCover.includes("path.join(articleDir, 'imgs', 'cover.png')"), 'WeChat conventional cover must be imgs/cover.png');
 assert(!wechatCover.includes('cover-xhs.png'), 'WeChat cover resolver must not use the XHS cover');
+assert(mainSkill.includes('humanizer-zh` to remove generic AI patterns, then load `writing-style'), 'Full workflow must reapply the project voice after humanizing');
 
 console.log('Plugin contracts OK');

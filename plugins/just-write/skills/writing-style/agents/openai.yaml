@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Style"
+  short_description: "Build and audit a truthful personal writing voice"
+  default_prompt: "Use my project style profile to draft or revise this Chinese article."
