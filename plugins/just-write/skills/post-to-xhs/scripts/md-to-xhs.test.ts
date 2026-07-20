@@ -7,6 +7,7 @@ import {
   buildEndingHtml,
   commitGeneratedOutput,
   parseXhsArgs,
+  render,
   resolveCoverImage,
   type RenderResult,
 } from './md-to-xhs';
@@ -20,6 +21,12 @@ function tempRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'xhs-output-'));
   roots.push(root);
   return root;
+}
+
+function writeArticle(root: string, body: string): string {
+  const article = path.join(root, 'article.md');
+  fs.writeFileSync(article, `---\ntitle: 分页压力测试\nauthor: 测试作者\n---\n\n${body}`, 'utf8');
+  return article;
 }
 
 describe('XHS rendering contracts', () => {
@@ -93,4 +100,86 @@ describe('XHS rendering contracts', () => {
       markdownPath: 'article.md', aspect: '1:1', author: 'CLI作者', tags: '配置标签',
     });
   });
+
+  test('paginates nested structures, long prose, code, and tables without clipping', async () => {
+    const root = tempRoot();
+    const prose = '这是一段用于验证中文分页、英文 pagination 和长链接 https://example.com/some/really/long/path 的正文。';
+    const code = Array.from({ length: 24 }, (_, index) => `const value${index} = "line-${index}";`).join('\n');
+    const rows = Array.from({ length: 16 }, (_, index) => `| ${index + 1} | 第 ${index + 1} 行表格内容 |`).join('\n');
+    fs.writeFileSync(path.join(root, 'wide.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400"><rect width="1200" height="400" fill="#ddd"/></svg>');
+    fs.writeFileSync(path.join(root, 'tall.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="1200"><rect width="400" height="1200" fill="#ccc"/></svg>');
+    const article = writeArticle(root, `# 分页压力测试
+
+## 长段落
+
+${Array.from({ length: 28 }, () => prose).join('')}
+
+## 嵌套内容
+
+> 第一段引用包含 **强调内容**。
+>
+> - 引用中的列表一
+> - 引用中的列表二
+
+1. 第一项
+2. 第二项包含较长的说明文字，用于验证有序列表分页后仍然保持正确编号。
+3. 第三项
+
+## 图片
+
+![横图](wide.svg)
+
+![竖图](tall.svg)
+
+## 代码
+
+\`\`\`ts
+${code}
+\`\`\`
+
+## 表格
+
+| 序号 | 内容 |
+| --- | --- |
+${rows}
+`);
+    const output = path.join(root, 'xhs');
+
+    const result = await render(article, output, 'default', '1:1', '测试作者', '分页,测试');
+
+    expect(result.totalPages).toBeGreaterThan(4);
+    expect(result.images.every((image) => fs.existsSync(image))).toBe(true);
+    expect(path.basename(result.images[0]!)).toBe('01-cover.png');
+    expect(path.basename(result.images.at(-1)!)).toMatch(/-ending\.png$/);
+  }, 60_000);
+
+  test('renders the same short article in every supported aspect', async () => {
+    const root = tempRoot();
+    const article = writeArticle(root, `# 分页压力测试
+
+## 正文
+
+短文章也应在所有受支持的画布比例中稳定生成，且保持封面、正文和结束页结构。
+`);
+
+    for (const aspect of ['3:4', '9:16', '1:1', '4:3']) {
+      const output = path.join(root, aspect.replace(':', '-'));
+      const result = await render(article, output, 'default', aspect, '测试作者', '');
+      expect(result.totalPages).toBe(3);
+    }
+  }, 60_000);
+
+  test('rejects an unsplittable oversized block instead of writing clipped pages', async () => {
+    const root = tempRoot();
+    const article = writeArticle(root, `# 分页压力测试
+
+<div style="height: 5000px">不可安全拆分的内容</div>
+`);
+    const output = path.join(root, 'xhs');
+
+    await expect(render(article, output, 'default', '3:4', '测试作者', '')).rejects.toThrow(
+      /Pagination failed: cannot safely split other block/,
+    );
+    expect(fs.readdirSync(output)).toEqual([]);
+  }, 30_000);
 });

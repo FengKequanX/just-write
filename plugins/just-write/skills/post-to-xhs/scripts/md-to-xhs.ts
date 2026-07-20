@@ -118,6 +118,7 @@ function renderWithChrome(
       '--no-sandbox',
       '--hide-scrollbars',
       '--run-all-compositor-stages-before-draw',
+      '--virtual-time-budget=8000',
       `--window-size=${width},${height}`,
       `--screenshot=${tmpPng}`,
       fileUrl,
@@ -778,181 +779,487 @@ async function measureContentPagesWithChrome(
   viewportWidth: number,
   baseDir: string,
 ): Promise<string[]> {
-  const blocks = splitHtmlAtBlockBoundaries(resolveImagePaths(addImageDimensions(bodyHtml, baseDir), baseDir));
+  const sourceHtml = resolveImagePaths(addImageDimensions(bodyHtml, baseDir), baseDir);
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="content content--prose" style="${dims}">
   <div id="measure" class="body" style="width:${viewportWidth}px;"></div>
-  <script id="xhs-blocks" type="application/json">${jsonForScript(blocks)}</script>
+  <script id="xhs-source" type="application/json">${jsonForScript(sourceHtml)}</script>
   <script>
-    (() => {
+    (async () => {
       const limit = ${viewportHeight};
       const measureEl = document.getElementById('measure');
-      const blocks = JSON.parse(document.getElementById('xhs-blocks').textContent || '[]');
-      const hasImage = (html) => /<img\\b/i.test(html);
-      const isHeading = (html) => /^\\s*<h[1-6]\\b/i.test(html);
-      const visibleText = (html) => html.replace(/<[^>]+>/g, '').replace(/&[^;]+;/g, 'x');
-      const visibleLength = (html) => visibleText(html).length;
-
-      const heightOf = (html) => {
-        measureEl.innerHTML = html;
-        return measureEl.getBoundingClientRect().height;
+      const sourceHtml = JSON.parse(document.getElementById('xhs-source').textContent || '""');
+      const finish = (value) => {
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(value))));
+        const pre = document.createElement('pre');
+        pre.id = 'xhs-measure-result';
+        pre.textContent = encoded;
+        document.body.replaceChildren(pre);
       };
 
-      const chooseVisibleSplitPoint = (html, maxChars) => {
-        const text = visibleText(html);
-        let splitAt = Math.min(maxChars, text.length);
-        if (splitAt <= 0 || splitAt >= text.length) return splitAt;
-        const lowerBound = Math.max(1, splitAt - 30);
-        for (let i = splitAt; i >= lowerBound; i--) {
-          if (/[，。！？；：、,.!?;:\\s]/.test(text[i - 1] || '')) return i;
-        }
-        const isAsciiWord = (ch) => !!ch && /[A-Za-z0-9]/.test(ch);
-        while (splitAt > lowerBound && isAsciiWord(text[splitAt - 1]) && isAsciiWord(text[splitAt])) splitAt--;
-        return splitAt;
-      };
+      try {
+        await document.fonts.ready;
 
-      const splitInlineHtmlAtVisibleChars = (html, maxChars) => {
-        const splitChars = chooseVisibleSplitPoint(html, maxChars);
-        if (splitChars <= 0 || visibleLength(html) <= splitChars) return null;
-        const tokens = html.match(/<[^>]+>|&[^;]+;|./gsu) || [];
-        const openTags = [];
-        let head = '';
-        let tail = '';
-        let visibleCount = 0;
-        let isTail = false;
-        const closeOpenTags = () => openTags.slice().reverse().map((tag) => '</' + tag.name + '>').join('');
-        const reopenTags = () => openTags.map((tag) => tag.html).join('');
+        const source = document.createElement('div');
+        source.innerHTML = sourceHtml;
+        const imageSources = Array.from(source.querySelectorAll('img'))
+          .map((img) => img.currentSrc || img.src)
+          .filter(Boolean);
+        await Promise.all(imageSources.map((src) => new Promise((resolve, reject) => {
+          const img = new Image();
+          const timeout = setTimeout(() => reject(new Error('image load timed out: ' + src)), 6000);
+          img.onload = () => { clearTimeout(timeout); resolve(undefined); };
+          img.onerror = () => { clearTimeout(timeout); reject(new Error('image failed to load: ' + src)); };
+          img.src = src;
+          if (img.complete && img.naturalWidth > 0) {
+            clearTimeout(timeout);
+            resolve(undefined);
+          }
+        })));
 
-        for (const token of tokens) {
-          if (token.startsWith('<')) {
-            if (isTail) {
-              tail += token;
+        const serializeNode = (node) => {
+          const holder = document.createElement('div');
+          holder.appendChild(node.cloneNode(true));
+          return holder.innerHTML;
+        };
+        const kindOfElement = (element) => {
+          const tag = element.tagName.toLowerCase();
+          if (/^h[1-6]$/.test(tag)) return 'heading';
+          if (tag === 'p') return element.querySelector('img') ? 'image' : 'paragraph';
+          if (tag === 'blockquote') return 'blockquote';
+          if (tag === 'pre') return 'code';
+          if (tag === 'table') return 'table';
+          if (element.querySelector('img')) return 'image';
+          return 'other';
+        };
+        const blockFromNode = (node, forcedKind) => {
+          const html = serializeNode(node);
+          const element = node.nodeType === Node.ELEMENT_NODE ? node : null;
+          return {
+            html,
+            kind: forcedKind || (element ? kindOfElement(element) : 'paragraph'),
+            hasImage: !!(element && element.querySelector('img')),
+          };
+        };
+        const extractBlocks = (html) => {
+          const container = document.createElement('div');
+          container.innerHTML = html;
+          const result = [];
+          for (const node of Array.from(container.childNodes)) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              if (node.textContent && node.textContent.trim()) {
+                const paragraph = document.createElement('p');
+                paragraph.textContent = node.textContent;
+                result.push(blockFromNode(paragraph, 'paragraph'));
+              }
               continue;
             }
-            head += token;
-            const tagName = (token.match(/^<\\/?\\s*([a-zA-Z0-9-]+)/) || [])[1]?.toLowerCase();
-            const isClosing = /^<\\//.test(token);
-            const isSelfClosing = /\\/>$/.test(token) || /^(?:br|hr|img|input|meta|link)$/i.test(tagName || '');
-            if (tagName && isClosing) {
-              const idx = openTags.map((tag) => tag.name).lastIndexOf(tagName);
-              if (idx >= 0) openTags.splice(idx, 1);
-            } else if (tagName && !isSelfClosing) {
-              openTags.push({ name: tagName, html: token });
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            const element = node;
+            const tag = element.tagName.toLowerCase();
+            if (tag === 'ul' || tag === 'ol') {
+              const items = Array.from(element.children).filter((child) => child.tagName.toLowerCase() === 'li');
+              if (items.length > 0) {
+                const start = tag === 'ol' ? Number(element.getAttribute('start') || '1') : 1;
+                items.forEach((item, index) => {
+                  const wrapper = element.cloneNode(false);
+                  if (tag === 'ol') wrapper.setAttribute('start', String(start + index));
+                  wrapper.appendChild(item.cloneNode(true));
+                  result.push(blockFromNode(wrapper, 'list-item'));
+                });
+                continue;
+              }
             }
+            if (tag === 'blockquote') {
+              const children = Array.from(element.childNodes).filter((child) =>
+                child.nodeType !== Node.TEXT_NODE || !!(child.textContent && child.textContent.trim()));
+              if (children.length > 1) {
+                for (const child of children) {
+                  if (child.nodeType === Node.ELEMENT_NODE && ['ul', 'ol'].includes(child.tagName.toLowerCase())) {
+                    const list = child;
+                    const items = Array.from(list.children).filter((item) => item.tagName.toLowerCase() === 'li');
+                    const start = list.tagName.toLowerCase() === 'ol' ? Number(list.getAttribute('start') || '1') : 1;
+                    items.forEach((item, index) => {
+                      const quoteWrapper = element.cloneNode(false);
+                      const listWrapper = list.cloneNode(false);
+                      if (list.tagName.toLowerCase() === 'ol') listWrapper.setAttribute('start', String(start + index));
+                      listWrapper.appendChild(item.cloneNode(true));
+                      quoteWrapper.appendChild(listWrapper);
+                      result.push(blockFromNode(quoteWrapper, 'blockquote'));
+                    });
+                    continue;
+                  }
+                  const wrapper = element.cloneNode(false);
+                  wrapper.appendChild(child.cloneNode(true));
+                  result.push(blockFromNode(wrapper, 'blockquote'));
+                }
+                continue;
+              }
+            }
+            result.push(blockFromNode(element));
+          }
+          return result;
+        };
+        const blockFromHtml = (html, kind) => {
+          const container = document.createElement('div');
+          container.innerHTML = html;
+          const element = container.firstElementChild;
+          return {
+            html,
+            kind: kind || (element ? kindOfElement(element) : 'other'),
+            hasImage: !!(element && element.querySelector('img')),
+          };
+        };
+        const visibleText = (html, stripRepeatedHeaders = false) => {
+          const container = document.createElement('div');
+          container.innerHTML = html;
+          if (stripRepeatedHeaders) {
+            container.querySelectorAll('[data-xhs-repeated-header="true"]').forEach((node) => node.remove());
+          }
+          return (container.textContent || '').replace(/\\s+/g, ' ').trim();
+        };
+        const visibleLength = (html) => {
+          const container = document.createElement('div');
+          container.innerHTML = html;
+          return (container.textContent || '').length;
+        };
+        const heightOf = (html) => {
+          measureEl.innerHTML = html;
+          return measureEl.getBoundingClientRect().height;
+        };
+        const lineCount = (html) => {
+          measureEl.innerHTML = html;
+          const range = document.createRange();
+          range.selectNodeContents(measureEl);
+          const tops = [];
+          for (const rect of Array.from(range.getClientRects())) {
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            if (!tops.some((top) => Math.abs(top - rect.top) < 1)) tops.push(rect.top);
+          }
+          return tops.length;
+        };
+        const fragmentHtml = (fragment) => {
+          const holder = document.createElement('div');
+          holder.appendChild(fragment);
+          return holder.innerHTML;
+        };
+        const chooseSplitPoint = (html, maxChars) => {
+          const text = (() => {
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            return container.textContent || '';
+          })();
+          let splitAt = Math.min(maxChars, text.length);
+          if (splitAt <= 0 || splitAt >= text.length) return splitAt;
+          const lowerBound = Math.max(1, splitAt - 30);
+          for (let i = splitAt; i >= lowerBound; i--) {
+            if (/[，。！？；：、,.!?;:\\s]/.test(text[i - 1] || '')) return i;
+          }
+          const isAsciiWord = (ch) => !!ch && /[A-Za-z0-9]/.test(ch);
+          while (splitAt > lowerBound && isAsciiWord(text[splitAt - 1]) && isAsciiWord(text[splitAt])) splitAt--;
+          return splitAt;
+        };
+        const splitAtVisibleChars = (html, requestedChars, adjustToBoundary = true) => {
+          const host = document.createElement('div');
+          host.innerHTML = html;
+          const total = (host.textContent || '').length;
+          const splitChars = adjustToBoundary ? chooseSplitPoint(html, requestedChars) : requestedChars;
+          if (splitChars <= 0 || splitChars >= total) return null;
+          const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+          let remaining = splitChars;
+          let target = null;
+          let offset = 0;
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const length = (node.nodeValue || '').length;
+            if (remaining <= length) {
+              target = node;
+              offset = remaining;
+              break;
+            }
+            remaining -= length;
+          }
+          if (!target) return null;
+          const headRange = document.createRange();
+          headRange.setStart(host, 0);
+          headRange.setEnd(target, offset);
+          const tailRange = document.createRange();
+          tailRange.setStart(target, offset);
+          tailRange.setEnd(host, host.childNodes.length);
+          const head = fragmentHtml(headRange.cloneContents());
+          const tail = fragmentHtml(tailRange.cloneContents());
+          if (!visibleText(head) || !visibleText(tail)) return null;
+          return { head, tail };
+        };
+        const splitTextToFit = (current, block, enforceWidows = true) => {
+          const total = visibleLength(block.html);
+          const totalLines = lineCount(block.html);
+          let low = 1;
+          let high = total - 1;
+          let best = null;
+          let bestLength = 0;
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const candidate = splitAtVisibleChars(block.html, mid, true);
+            if (!candidate) {
+              high = mid - 1;
+              continue;
+            }
+            const candidateLength = visibleLength(candidate.head);
+            const fits = heightOf(current + candidate.head) <= limit;
+            const respectsWidows = !enforceWidows || totalLines < 4 ||
+              (lineCount(candidate.head) >= 2 && lineCount(candidate.tail) >= 2);
+            if (fits && respectsWidows) {
+              if (candidateLength > bestLength) {
+                best = candidate;
+                bestLength = candidateLength;
+              }
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          return best;
+        };
+        const splitCodeToFit = (current, block) => {
+          const container = document.createElement('div');
+          container.innerHTML = block.html;
+          const text = container.textContent || '';
+          const lineEnds = [];
+          for (let i = 0; i < text.length; i++) {
+            if (text[i] === '\\n') lineEnds.push(i + 1);
+          }
+          let best = null;
+          for (const end of lineEnds) {
+            const candidate = splitAtVisibleChars(block.html, end, false);
+            if (!candidate || heightOf(current + candidate.head) > limit) break;
+            best = candidate;
+          }
+          return best || splitTextToFit(current, block, false);
+        };
+        const splitTableToFit = (current, block) => {
+          const container = document.createElement('div');
+          container.innerHTML = block.html;
+          const table = container.querySelector('table');
+          if (!table) return null;
+          const rows = Array.from(table.tBodies).flatMap((body) => Array.from(body.rows));
+          if (rows.length < 2) return null;
+          const wasRepeated = !!(table.tHead && table.tHead.hasAttribute('data-xhs-repeated-header'));
+          const buildTable = (selectedRows, repeatedHeader, includeFooter) => {
+            const clone = table.cloneNode(true);
+            const bodies = Array.from(clone.tBodies);
+            let targetBody = bodies[0];
+            if (!targetBody) {
+              targetBody = document.createElement('tbody');
+              clone.appendChild(targetBody);
+            }
+            targetBody.replaceChildren(...selectedRows.map((row) => row.cloneNode(true)));
+            bodies.slice(1).forEach((body) => body.remove());
+            if (!includeFooter && clone.tFoot) clone.tFoot.remove();
+            if (repeatedHeader && clone.tHead) clone.tHead.setAttribute('data-xhs-repeated-header', 'true');
+            return serializeNode(clone);
+          };
+          let best = null;
+          for (let count = 1; count < rows.length; count++) {
+            const head = buildTable(rows.slice(0, count), wasRepeated, false);
+            if (heightOf(current + head) > limit) break;
+            const tail = buildTable(rows.slice(count), true, true);
+            best = { head, tail };
+          }
+          return best;
+        };
+        const fitImageBlock = (block) => {
+          const container = document.createElement('div');
+          container.innerHTML = block.html;
+          const images = Array.from(container.querySelectorAll('img'));
+          if (images.length === 0) return null;
+          let low = 32;
+          let high = Math.min(400, limit);
+          let best = null;
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            images.forEach((img) => {
+              img.style.maxHeight = mid + 'px';
+              img.style.height = 'auto';
+            });
+            const candidate = container.innerHTML;
+            if (heightOf(candidate) <= limit) {
+              best = candidate;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          return best;
+        };
+        const prefixWithLines = (block, minimumLines) => {
+          if (block.hasImage || visibleLength(block.html) === 0) return block.html;
+          const total = visibleLength(block.html);
+          let low = 1;
+          let high = total - 1;
+          let best = block.html;
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const candidate = splitAtVisibleChars(block.html, mid, false);
+            if (!candidate) break;
+            if (lineCount(candidate.head) >= minimumLines) {
+              best = candidate.head;
+              high = mid - 1;
+            } else {
+              low = mid + 1;
+            }
+          }
+          return best;
+        };
+        const pageIsValid = (html) => {
+          if (!html.trim() || heightOf(html) > limit + 0.5) return false;
+          const pageBlocks = extractBlocks(html);
+          return pageBlocks.length > 0 && pageBlocks[pageBlocks.length - 1].kind !== 'heading';
+        };
+
+        const blocks = extractBlocks(sourceHtml);
+        const pages = [];
+        let current = '';
+
+        for (let i = 0; i < blocks.length; i++) {
+          const block = blocks[i];
+          if (block.kind === 'heading') {
+            const next = blocks[i + 1];
+            if (!next) throw new Error('heading has no following content');
+            const required = block.html + prefixWithLines(next, 2);
+            if (heightOf(required) > limit) throw new Error('heading and two following lines exceed one page');
+            if (current.trim() && heightOf(current + required) > limit) {
+              pages.push(current);
+              current = '';
+            }
+          }
+
+          if (heightOf(current + block.html) <= limit) {
+            current += block.html;
             continue;
           }
-          if (!isTail && visibleCount >= splitChars) {
-            head += closeOpenTags();
-            tail += reopenTags();
-            isTail = true;
-          }
-          if (isTail) tail += token;
-          else {
-            head += token;
-            visibleCount += 1;
-          }
-        }
-        if (!tail.trim()) return null;
-        return { head, tail };
-      };
 
-      const splitParagraphBlock = (html, maxChars) => {
-        if (maxChars <= 0 || hasImage(html)) return null;
-        const match = html.match(/^(\\s*<p\\b[^>]*>)([\\s\\S]*?)(<\\/p>\\s*)$/i);
-        if (!match) return null;
-        const split = splitInlineHtmlAtVisibleChars(match[2] || '', maxChars);
-        if (!split) return null;
-        return {
-          head: (match[1] || '<p>') + split.head + (match[3] || '</p>'),
-          tail: (match[1] || '<p>') + split.tail + (match[3] || '</p>'),
-        };
-      };
-
-      const splitBlockToFit = (current, block) => {
-        const total = visibleLength(block);
-        let low = 1;
-        let high = total - 1;
-        let best = null;
-        while (low <= high) {
-          const mid = Math.floor((low + high) / 2);
-          const candidate = splitParagraphBlock(block, mid);
-          if (!candidate) break;
-          const h = heightOf(current + candidate.head);
-          if (h <= limit) {
-            best = candidate;
-            low = mid + 1;
-          } else {
-            high = mid - 1;
-          }
-        }
-        return best;
-      };
-
-      const pages = [];
-      let current = '';
-
-      for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i] || '';
-        if (!block.trim()) continue;
-
-        if (isHeading(block) && current.trim() && blocks[i + 1]) {
-          const withHeadingAndNext = heightOf(current + block + blocks[i + 1]);
-          if (withHeadingAndNext > limit) {
+          if (current.trim()) {
+            const split = !block.hasImage && ['paragraph', 'list-item', 'blockquote', 'code', 'table'].includes(block.kind)
+              ? block.kind === 'code'
+                ? splitCodeToFit(current, block)
+                : block.kind === 'table'
+                  ? splitTableToFit(current, block)
+                  : splitTextToFit(current, block, true)
+              : null;
+            if (split) {
+              pages.push(current + split.head);
+              current = '';
+              blocks[i] = blockFromHtml(split.tail, block.kind);
+              i--;
+              continue;
+            }
             pages.push(current);
             current = '';
-          }
-        }
-
-        const candidateHeight = heightOf(current + block);
-        if (candidateHeight <= limit) {
-          current += block;
-          continue;
-        }
-
-        if (!hasImage(block)) {
-          const split = splitBlockToFit(current, block);
-          if (split) {
-            if ((current + split.head).trim()) pages.push(current + split.head);
-            current = '';
-            blocks[i] = split.tail;
             i--;
             continue;
           }
+
+          if (block.hasImage) {
+            const fitted = fitImageBlock(block);
+            if (fitted) {
+              current = fitted;
+              continue;
+            }
+          }
+
+          const split = !block.hasImage && ['paragraph', 'list-item', 'blockquote', 'code', 'table'].includes(block.kind)
+            ? block.kind === 'code'
+              ? splitCodeToFit('', block)
+              : block.kind === 'table'
+                ? splitTableToFit('', block)
+                : splitTextToFit('', block, true)
+            : null;
+          if (split) {
+            pages.push(split.head);
+            blocks[i] = blockFromHtml(split.tail, block.kind);
+            i--;
+            continue;
+          }
+
+          const measured = Math.ceil(heightOf(block.html));
+          throw new Error('cannot safely split ' + block.kind + ' block (' + measured + 'px > ' + limit + 'px)');
         }
 
-        if (current.trim()) {
-          pages.push(current);
-          current = '';
-          i--;
-        } else {
-          pages.push(block);
+        if (current.trim()) pages.push(current);
+        if (pages.length === 0) pages.push('');
+
+        if (pages.length >= 2) {
+          const lastIndex = pages.length - 1;
+          const originalLastHeight = heightOf(pages[lastIndex]);
+          if (originalLastHeight / limit < 0.45) {
+            const combined = extractBlocks(pages[lastIndex - 1] + pages[lastIndex]);
+            let best = null;
+            for (let splitAt = 1; splitAt < combined.length; splitAt++) {
+              const left = combined.slice(0, splitAt).map((item) => item.html).join('');
+              const right = combined.slice(splitAt).map((item) => item.html).join('');
+              if (!pageIsValid(left) || !pageIsValid(right)) continue;
+              const leftHeight = heightOf(left);
+              const rightHeight = heightOf(right);
+              if (leftHeight / limit < 0.45 || rightHeight <= originalLastHeight) continue;
+              const score = Math.abs(leftHeight - rightHeight);
+              if (!best || score < best.score) best = { left, right, score };
+            }
+            if (best) {
+              pages[lastIndex - 1] = best.left;
+              pages[lastIndex] = best.right;
+            }
+          }
         }
+
+        const metrics = pages.map((page, index) => {
+          const height = heightOf(page);
+          const pageBlocks = extractBlocks(page);
+          if (height > limit + 0.5) {
+            throw new Error('page ' + (index + 1) + ' overflows by ' + Math.ceil(height - limit) + 'px');
+          }
+          if (pageBlocks.length > 0 && pageBlocks[pageBlocks.length - 1].kind === 'heading') {
+            throw new Error('page ' + (index + 1) + ' ends with an orphan heading');
+          }
+          return { height, blockKinds: pageBlocks.map((item) => item.kind) };
+        });
+        const comparableText = (html, stripRepeatedHeaders = false) =>
+          visibleText(html, stripRepeatedHeaders).replace(/\\s+/g, '');
+        const sourceText = comparableText(sourceHtml);
+        const pagedText = pages.map((page) => comparableText(page, true)).join('');
+        if (sourceText !== pagedText) {
+          let mismatch = 0;
+          while (mismatch < sourceText.length && sourceText[mismatch] === pagedText[mismatch]) mismatch++;
+          throw new Error('paginated text differs from source content at character ' + mismatch +
+            ' (source ' + sourceText.length + ', pages ' + pagedText.length + ')');
+        }
+        finish({ pages, metrics });
+      } catch (error) {
+        finish({ error: error instanceof Error ? error.message : String(error) });
       }
-
-      if (current.trim()) pages.push(current);
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ pages: pages.length ? pages : [''] }))));
-      const pre = document.createElement('pre');
-      pre.id = 'xhs-measure-result';
-      pre.textContent = encoded;
-      document.body.replaceChildren(pre);
     })();
   </script>
 </body></html>`;
 
   const dom = await dumpDomWithChrome(html, size.width, size.height);
   const match = dom.match(/<pre id="xhs-measure-result">([^<]+)<\/pre>/);
-  if (!match) return [bodyHtml];
+  if (!match) throw new Error('[md-to-xhs] Pagination failed: Chrome returned no measurement result');
 
   try {
     const result = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+    if (typeof result.error === 'string' && result.error) {
+      throw new Error(`[md-to-xhs] Pagination failed: ${result.error}`);
+    }
     const pages = Array.isArray(result.pages)
       ? result.pages.filter((p: unknown) => typeof p === 'string' && p.trim())
       : [];
-    return pages.length > 0 ? pages : [bodyHtml];
-  } catch {
-    return [bodyHtml];
+    if (pages.length === 0) throw new Error('[md-to-xhs] Pagination failed: Chrome returned no content pages');
+    return pages;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('[md-to-xhs] Pagination failed:')) throw error;
+    throw new Error(`[md-to-xhs] Pagination failed: invalid Chrome result (${error instanceof Error ? error.message : String(error)})`);
   }
 }
 
@@ -1007,36 +1314,6 @@ export function buildEndingHtml(
   </div>
   ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
-}
-
-// --- Content Block Splitting ---
-
-function splitHtmlAtBlockBoundaries(html: string): string[] {
-  const pattern = /(<\/(?:p|h[1-6]|blockquote|ul|ol|pre|div|table)>)\s*/gi;
-  const parts: string[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(html)) !== null) {
-    parts.push(html.slice(lastIndex, match.index + match[0].length));
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < html.length) {
-    parts.push(html.slice(lastIndex));
-  }
-  return parts
-    .filter((p) => p.trim().length > 0)
-    .flatMap(splitListBlock);
-}
-
-function splitListBlock(html: string): string[] {
-  const match = html.match(/^\s*<(ul|ol)([^>]*)>([\s\S]*)<\/\1>\s*$/i);
-  if (!match) return [html];
-
-  const [, tag, attrs = '', inner = ''] = match;
-  const items = inner.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi);
-  if (!items || items.length <= 1) return [html];
-
-  return items.map((item) => `<${tag}${attrs}>${item}</${tag}>`);
 }
 
 // --- Caption Generation ---
