@@ -20,6 +20,7 @@ interface PageSection {
   rawTokens: Token[];
   layout: ContentLayout;
   slug: string;
+  subtitle?: string;
   coverImage?: string;
   coverAspectRatio?: string;
   tags?: string[];
@@ -258,6 +259,23 @@ function resolveImagePaths(html: string, baseDir: string): string {
 
 function normalizeReadingHtml(html: string): string {
   let protectedDepth = 0;
+  let doubleQuoteOpen = false;
+  let singleQuoteOpen = false;
+  let prevChar = '';
+
+  const curlyDouble = () => {
+    const out = doubleQuoteOpen ? '”' : '“';
+    doubleQuoteOpen = !doubleQuoteOpen;
+    return out;
+  };
+  const curlySingle = () => {
+    // Apostrophes inside Latin words (don't, it's) are never opening quotes.
+    if (/[A-Za-z]/.test(prevChar)) return '’';
+    const out = singleQuoteOpen ? '’' : '‘';
+    singleQuoteOpen = !singleQuoteOpen;
+    return out;
+  };
+
   return html.replace(/<[^>]+>|&[^;]+;|[^<&]+/g, (token) => {
     if (token.startsWith('<')) {
       const tagName = token.match(/^<\/?\s*([a-zA-Z0-9-]+)/)?.[1]?.toLowerCase();
@@ -268,13 +286,28 @@ function normalizeReadingHtml(html: string): string {
       return token;
     }
 
-    if (token.startsWith('&') || protectedDepth > 0) return token;
+    if (protectedDepth > 0) return token;
+
+    if (token.startsWith('&')) {
+      if (token === '&quot;') { const out = curlyDouble(); prevChar = out; return out; }
+      if (token === '&#39;') { const out = curlySingle(); prevChar = out; return out; }
+      prevChar = '';
+      return token;
+    }
+
+    let text = '';
+    for (const ch of token) {
+      if (ch === '"') text += curlyDouble();
+      else if (ch === "'") text += curlySingle();
+      else text += ch;
+      prevChar = text[text.length - 1] || '';
+    }
 
     const cjk = String.raw`[\p{Script=Han}\u3040-\u30ff\uff00-\uffef]`;
     const latin = String.raw`[A-Za-z0-9][A-Za-z0-9.+#/@_-]*`;
     const fixedGap = '&#8239;';
 
-    return token
+    return text
       .replace(new RegExp(`(${cjk})\\s+(${latin})`, 'gu'), `$1${fixedGap}$2`)
       .replace(new RegExp(`(${latin})\\s+(${cjk})`, 'gu'), `$1${fixedGap}$2`)
       .replace(/([0-9])\s+([年月日亿万%])/g, `$1${fixedGap}$2`)
@@ -557,6 +590,7 @@ function buildPageSections(
     rawTokens: [],
     layout: 'prose',
     slug: 'cover',
+    subtitle: fm.description || fm.summary || '',
     coverImage,
     coverAspectRatio: coverImage ? coverImageAspectRatio(coverImage, baseDir) : '4 / 3',
   });
@@ -622,9 +656,7 @@ function loadCss(theme: string): string {
 }
 
 function pageNumHtml(current: number, total: number): string {
-  void current;
-  void total;
-  return '';
+  return `<div class="page-num">${String(current).padStart(2, '0')}<span class="page-total"> / ${String(total).padStart(2, '0')}</span></div>`;
 }
 
 export function buildCoverHtml(
@@ -637,20 +669,25 @@ export function buildCoverHtml(
   totalPages: number,
   dims: string,
   _pageHeight: number,
+  subtitle = '',
 ): string {
+  void pageNum;
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="cover${coverImage ? '' : ' cover--text-only'}" style="${dims}">
   <div class="cover-content">
+    <div class="cover-kicker"><span class="kicker-dot"></span><span>${escapeHtml(author)}</span></div>
     ${coverImage ? `<div class="cover-image" style="--cover-source-ratio:${escapeHtml(coverAspectRatio)}"><img class="cover-image-bg" src="${escapeHtml(coverImage)}" alt="" aria-hidden="true"><img class="cover-image-fg" src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
     <div class="title-area">
       <div class="title">${escapeHtml(title)}</div>
-      <div class="divider"></div>
+      ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
     </div>
-    <div class="author">${escapeHtml(author)}</div>
+    <div class="cover-footer">
+      <span>JUST WRITE</span>
+      <span>共 ${String(totalPages).padStart(2, '0')} 页 · 右滑阅读</span>
+    </div>
   </div>
-  ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
 
@@ -663,8 +700,11 @@ function buildContentHtml(
   pageNum: number,
   totalPages: number,
   dims: string,
+  articleKicker = '',
 ): string {
   const layoutClass = `content--${layout}`;
+  const kicker = articleKicker.length > 22 ? `${articleKicker.slice(0, 21)}…` : articleKicker;
+  const kickerHtml = kicker ? `<div class="page-kicker">${escapeHtml(kicker)}</div>` : '';
   const titleHtml = sectionTitle
     ? `<div class="section-title">${escapeHtml(sectionTitle)}</div>`
     : '';
@@ -760,6 +800,7 @@ function buildContentHtml(
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="content ${layoutClass}" style="${dims}">
   <div class="content-accent-line"></div>
+  ${kickerHtml}
   ${titleHtml}
   ${bodyContent}
   ${pageNumHtml(pageNum, totalPages)}
@@ -1070,13 +1111,13 @@ async function measureContentPagesWithChrome(
           }
           return best;
         };
-        const fitImageBlock = (block) => {
+        const fitImageBlock = (block, prefix = '', minImagePx = 32) => {
           const container = document.createElement('div');
           container.innerHTML = block.html;
           const images = Array.from(container.querySelectorAll('img'));
           if (images.length === 0) return null;
-          let low = 32;
-          let high = Math.min(400, limit);
+          let low = minImagePx;
+          let high = Math.min(480, limit);
           let best = null;
           while (low <= high) {
             const mid = Math.floor((low + high) / 2);
@@ -1085,7 +1126,7 @@ async function measureContentPagesWithChrome(
               img.style.height = 'auto';
             });
             const candidate = container.innerHTML;
-            if (heightOf(candidate) <= limit) {
+            if (heightOf(prefix + candidate) <= limit) {
               best = candidate;
               low = mid + 1;
             } else {
@@ -1093,6 +1134,30 @@ async function measureContentPagesWithChrome(
             }
           }
           return best;
+        };
+        const isCaptionBlock = (block) => {
+          if (block.hasImage || block.kind !== 'paragraph') return false;
+          const container = document.createElement('div');
+          container.innerHTML = block.html;
+          const paragraph = container.firstElementChild;
+          if (!paragraph || paragraph.tagName.toLowerCase() !== 'p') return false;
+          const em = paragraph.querySelector(':scope > em');
+          if (!em) return false;
+          const total = (paragraph.textContent || '').trim().length;
+          const inside = (em.textContent || '').trim().length;
+          return total > 0 && total <= 160 && inside / total >= 0.8;
+        };
+        const mergeImageCaptions = (list) => {
+          const merged = [];
+          for (const item of list) {
+            const prev = merged[merged.length - 1];
+            if (prev && prev.hasImage && isCaptionBlock(item)) {
+              prev.html += item.html;
+              continue;
+            }
+            merged.push(item);
+          }
+          return merged;
         };
         const prefixWithLines = (block, minimumLines) => {
           if (block.hasImage || visibleLength(block.html) === 0) return block.html;
@@ -1119,7 +1184,7 @@ async function measureContentPagesWithChrome(
           return pageBlocks.length > 0 && pageBlocks[pageBlocks.length - 1].kind !== 'heading';
         };
 
-        const blocks = extractBlocks(sourceHtml);
+        const blocks = mergeImageCaptions(extractBlocks(sourceHtml));
         const pages = [];
         let current = '';
 
@@ -1155,6 +1220,13 @@ async function measureContentPagesWithChrome(
               blocks[i] = blockFromHtml(split.tail, block.kind);
               i--;
               continue;
+            }
+            if (block.hasImage) {
+              const squeezed = fitImageBlock(block, current, 260);
+              if (squeezed) {
+                current += squeezed;
+                continue;
+              }
             }
             pages.push(current);
             current = '';
@@ -1243,8 +1315,13 @@ async function measureContentPagesWithChrome(
   </script>
 </body></html>`;
 
-  const dom = await dumpDomWithChrome(html, size.width, size.height);
-  const match = dom.match(/<pre id="xhs-measure-result">([^<]+)<\/pre>/);
+  // Headless Chrome occasionally dumps the DOM before the measurement script
+  // finishes on a cold start; one retry absorbs that flakiness.
+  let match: RegExpMatchArray | null = null;
+  for (let attempt = 0; attempt < 2 && !match; attempt++) {
+    const dom = await dumpDomWithChrome(html, size.width, size.height);
+    match = dom.match(/<pre id="xhs-measure-result">([^<]+)<\/pre>/);
+  }
   if (!match) throw new Error('[md-to-xhs] Pagination failed: Chrome returned no measurement result');
 
   try {
@@ -1310,9 +1387,8 @@ export function buildEndingHtml(
   </div>
   <div class="ending-footer">
     <span>JUST WRITE</span>
-    <span>${String(totalPages).padStart(2, '0')}</span>
+    <span>${String(pageNum).padStart(2, '0')} / ${String(totalPages).padStart(2, '0')}</span>
   </div>
-  ${pageNumHtml(pageNum, totalPages)}
 </body></html>`;
 }
 
@@ -1436,6 +1512,7 @@ export async function render(
   }
 
   const totalPages = planned.length;
+  const mainTitle = pages.find((p) => p.type === 'cover')?.title || '';
 
   // Phase 2: Render with known totalPages
   const images: string[] = [];
@@ -1456,6 +1533,7 @@ export async function render(
         totalPages,
         dims,
         size.height,
+        section.subtitle || '',
       );
       html = resolveImagePaths(html, baseDir);
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
@@ -1477,6 +1555,7 @@ export async function render(
         pageNum,
         totalPages,
         dims,
+        mainTitle,
       );
       html = resolveImagePaths(html, baseDir);
       const suffix = chunkIndex === 0 ? section.slug : `${section.slug}-${chunkIndex + 1}`;
