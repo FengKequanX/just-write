@@ -92,6 +92,44 @@ function toHttpsUrl(url: string | undefined): string {
   return url.startsWith("http://") ? url.replace(/^http:\/\//i, "https://") : url;
 }
 
+function htmlToPlainText(html: string): string {
+  if (!html) return "";
+
+  let text = html;
+
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/(?:p|div|h[1-6]|li|tr|td|th)>/gi, "\n");
+  text = text.replace(/<[^>]+>/g, "");
+
+  const entityMap: Record<string, string> = {
+    "&nbsp;": " ",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&amp;": "&",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&apos;": "'",
+    "&mdash;": "—",
+    "&ndash;": "–",
+    "&hellip;": "…",
+    "&ldquo;": "“",
+    "&rdquo;": "”",
+    "&lsquo;": "‘",
+    "&rsquo;": "’",
+  };
+  text = text.replace(/&(?:[a-zA-Z]+|#\d+);/g, (entity) => {
+    if (entityMap[entity]) return entityMap[entity];
+    const numMatch = entity.match(/&#(\d+);/);
+    if (numMatch) return String.fromCharCode(Number.parseInt(numMatch[1]!, 10));
+    return entity;
+  });
+
+  text = text.replace(/[ \t]+/g, " ");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.split("\n").map(line => line.trim()).join("\n");
+  return text.trim();
+}
+
 async function loadUploadAsset(
   imagePath: string,
   baseDir?: string,
@@ -373,10 +411,11 @@ async function publishToDraft(
     if (!options.imageMediaIds || options.imageMediaIds.length === 0) {
       throw new Error("newspic requires at least one image");
     }
+    const plainContent = htmlToPlainText(options.content);
     article = {
       article_type: "newspic",
       title: options.title,
-      content: options.content,
+      content: plainContent,
       need_open_comment: noc,
       only_fans_can_comment: ofcc,
       image_info: {
