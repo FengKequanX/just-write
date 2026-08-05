@@ -48,7 +48,9 @@ codex plugin add just-write@just-write-local
 把排版稿保存到微信公众号草稿箱
 ```
 
-“写一篇文章”进入完整模式；意图明确的加工或发布请求直接进入对应能力，不再强制从选题重新开始。写作时会优先读取项目的个人风格档案，先建立正向作者声音，再用 `humanizer-zh` 清理通用 AI 痕迹。
+“写一篇文章”进入完整模式，也可以用 `/start-jw 主题` 直接启动；意图明确的加工或发布请求直接进入对应能力，不再强制从选题重新开始。
+
+写作时优先读取项目的个人风格档案，动笔前先过材料关卡，初稿只带正向目标，修稿阶段才按固定次序清理 AI 痕迹，最后由确定性脚本兜底检查。详见下文「写作质量体系」。
 
 ## 完整工作流
 
@@ -66,6 +68,30 @@ codex plugin add just-write@just-write-local
 | 抖音真实上传 | `确认发布抖音` |
 
 微信公众号仍是完整模式的主发布链。微信成功后，可按配置继续生成小红书素材，再选择是否 dry-run 或发布抖音。小红书始终只生成素材，不会自动打开或控制创作者平台。
+
+## 写作质量体系
+
+v1.4.0 融合了 [KKKKhazix/human-writing](https://github.com/KKKKhazix/human-writing)（活人感写作，MIT）的方法，把去 AI 味从「句式清理」升级为四层治理：材料门禁、正向写法、有序修稿、确定性检查。
+
+### 材料关卡
+
+写 1,200 字以上的非虚构长文前，必须先在内部列出至少 5 件有出处的具体材料（用户原话或可核验来源），且能组成一条实际过程。列不出就不产长稿，只有三种处理：有公开材料先研究再计数；依赖用户亲历时一次最多问 3 个问题；不许追问时收缩成 600 字左右短稿。目标字数和催促不能把材料变多。这一条挡住了「三条抽象观点灌成十二段」这个最大的 AI 味来源。
+
+### 正向中文写法
+
+初稿阶段只加载正向目标（`writing-style/references/chinese-prose.md`）：说话位置、按读者的下一个问题推进、句子主干前置、顺势接话、留白、白话打底。禁令清单在动笔前不加载，避免模型带着一长串「不许」写出僵硬回避的稿子。
+
+### 七遍修稿
+
+初稿完成后按 `writing-style/references/quality-check.md` 的固定次序修，先救人再清句子：看谁在说、看文章有没有往前走（含压缩试验：删掉三分之一后几乎没变，就保留短版）、拆表演性中文、听中文词序，第五遍才加载 `humanizer-zh` 清硬禁项，随后核事实、查结尾（删掉最后两段分别再读）。七遍之后跑四层审计出验收报告。
+
+### 确定性检查器
+
+```bash
+bun plugins/just-write/skills/humanizer-zh/scripts/check-prose.ts 稿件.md
+```
+
+正则硬查翻案句（「不是……而是……」等七组变形）、商业黑话（赋能、抓手、闭环、底层逻辑等 28 词）、硬停词、模型路标和正文破折号，命中即失败（exit 1）。短段鼓点、重「的」长句、借喻堆叠、语境判断词等列为警告，留给人工判断。正文句中的冒号默认只警告，小标题、列表项和对话引出处豁免，加 `--strict` 升级为失败。代码块、行内代码、链接和 frontmatter 自动屏蔽不参与检查。硬禁词表与 `humanizer-zh` 文档逐字一致，由测试断言保证不漂移。
 
 ## 文章目录与断点恢复
 
@@ -207,9 +233,9 @@ CLI 参数 > 项目 .baoyu-skills/<skill>/EXTEND.md > XDG 配置 > 用户目录�
 
 ## 个人写作风格
 
-可在项目中创建 `.baoyu-skills/writing-style/STYLE.md`，定义账号定位、作者姿态、证据边界、常用文章原型和代表文章路径。完整写作流程会在初稿前加载该档案，并在去 AI 味后再次检查作者声音。
+可在项目中创建 `.baoyu-skills/writing-style/STYLE.md`，定义账号定位、作者姿态、证据边界、常用文章原型和代表文章路径。完整写作流程会在初稿前加载该档案，七遍修稿全程保持作者姿态，最后用四层审计检查文章是否还像作者本人。
 
-风格层不会编造个人经历或情绪，也不会强制禁用小标题、冒号、列表等正常表达工具。它优先检查事实与推断边界、主线推进、证据质量和文章是否符合作者本人。
+风格层不会编造个人经历或情绪，也不会强制禁用小标题、列表等正常表达工具。它优先检查事实与推断边界、主线推进、证据质量和作者声音。
 
 ## 开发与验证
 
@@ -231,12 +257,18 @@ bash update.sh
 |---|---|
 | `just-write` | 意图路由、完整流程和断点状态 |
 | `brainstorming` | 选题讨论 |
-| `humanizer-zh` | 中文去 AI 痕迹 |
-| `writing-style` | 项目个人文风、文章原型与四层质检 |
+| `humanizer-zh` | 中文负向模式字典与确定性检查器（check-prose） |
+| `writing-style` | 材料关卡、正向中文写法、个人文风与七遍修稿 |
 | `baoyu-format-markdown` | 标题生成和 Markdown 排版 |
 | `baoyu-post-to-wechat` | 微信公众号草稿发布 |
 | `post-to-xhs` | 小红书轮播图与文案素材 |
 | `sync-to-douyin` | 抖音图文校验与上传 |
+
+## 致谢
+
+- [KKKKhazix/human-writing](https://github.com/KKKKhazix/human-writing)（MIT）：材料关卡、中文正向写法、七遍修稿与检查脚本的方法来源，详见 `plugins/just-write/THIRD_PARTY_NOTICES.md`
+- [Wikipedia: Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing)、blader/humanizer、hardikpandya/stop-slop：`humanizer-zh` 的模式基础
+- [JimLiu/baoyu-skills](https://github.com/JimLiu/baoyu-skills)：`baoyu-format-markdown` 与 `baoyu-post-to-wechat` 的上游
 
 ## License
 
