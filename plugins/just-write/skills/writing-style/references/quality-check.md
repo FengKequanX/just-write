@@ -1,6 +1,55 @@
-# Four-Layer Writing Audit
+# Seven-Pass Revision and Four-Layer Writing Audit
 
-Audit from objective failures to subjective voice. A later layer cannot compensate for a failure in an earlier one.
+Revise in order. Save prohibition lists for the fifth pass: first rescue the person and material, then clean the sentences. After all seven passes, audit from objective failures to subjective voice. A later layer cannot compensate for a failure in an earlier one.
+
+## Seven revision passes
+
+### 1. Identify who is speaking
+
+- Mark paragraphs that another model could have written unchanged.
+- Repair them with information provenance, the author's choice of evidence, and concrete material. Delete them when there is nothing real to add.
+- Do not add “我觉得”, “说真的”, or decorative first person to hide an anonymous voice. Voice comes from selection and position.
+
+### 2. Check whether the article moves forward
+
+- Give every paragraph one internal function: action, fact, explanation, example, question, judgment, background, or emotion.
+- Ask what each following paragraph adds. Merge or delete a paragraph that merely rephrases the one before it.
+- Internally name one material source for every nonfiction paragraph. Delete a paragraph whose only source is “further explanation” or “a possible effect”.
+- Run the compression test. If removing one third leaves the facts, actions, judgments, and reading experience almost unchanged, keep the shorter version. Never preserve padding for a target word count.
+
+### 3. Remove performative Chinese
+
+- Delete most screenshot-ready “deep” lines that add no fact, explanation, or earned emotion in context. If consecutive paragraphs end in short judgments, keep only the one with the strongest material.
+- Remove unsourced exact times, weather, expressions, room details, props, and quotations from nonfiction.
+- Remove fake forum speech, rows of abstract nouns, and metaphors that keep changing worlds.
+- When three metaphor fields appear close together, restore all of them to their literal meaning first.
+
+### 4. Listen to the Chinese
+
+- Put the actor and action early. Rework “……的，是……”, “真正让……的”, and long sentences carrying several “的”.
+- Check what each sentence hands to the next. Omit a repeated subject when the reference is clear; write the name again when two people are present.
+- Read aloud for the weight of pauses. Merge short sentences that knock like a drum and split a long sentence only where one thought has landed.
+- After an action, object, or exact words already convey emotion, try deleting the explanation that follows.
+
+### 5. Clear prohibited patterns
+
+- Load `humanizer-zh` only now and apply its hard prohibitions one by one.
+- Run `bun <humanizer-zh>/scripts/check-prose.ts <draft.md>` and revise until all hard failures are zero.
+- Treat warnings as prompts for human judgment. Punctuation warnings also become failures under `--strict`.
+
+### 6. Verify reality
+
+- Recheck time, numbers, identities, quotations, causality, and every first-person action. This pass maps to L1 and L3 below.
+- Repeated “公开资料显示” or “目前无法确认” means verification notes leaked into the body. Move the notes backstage and state a material boundary once.
+- Do not add “可能” or “或许” to every sentence. Repeated hedging makes the author disappear.
+
+### 7. Test the ending
+
+- Delete each of the last two paragraphs in turn and reread. If the article gains force, end earlier.
+- Delete a final paragraph that merely summarizes the article.
+- Search for “时代、文明、未来、世界、历史、所有人”. If the body has not continuously worked at that scale, return to a concrete fact, action, or present judgment.
+
+After the seven passes, run the existing four layers as the final acceptance check.
 
 ## L1 — Integrity and hard failures
 
@@ -54,3 +103,7 @@ Priority fixes:
 ```
 
 List no more than three priority fixes. Prefer a concrete edit over a style score.
+
+---
+
+Adapted from KKKKhazix/human-writing (MIT), especially `references/revision.md` and `references/reality.md`.
