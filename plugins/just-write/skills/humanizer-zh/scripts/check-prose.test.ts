@@ -100,14 +100,31 @@ describe('警告边界', () => {
     expect(result.warnings.some((item) => item.startsWith('冒号'))).toBe(false);
   });
 
-  test('正文标点默认警告，strict 模式升级为失败', () => {
+  test('正文破折号默认失败，冒号默认警告、strict 升级为失败', () => {
     const text = '结果：任务完成——耗时两天。';
     const normal = checkProse(text);
     const strict = checkProse(text, { strict: true });
-    expect(normal.failures).toHaveLength(0);
+    expect(normal.failures.some((item) => item.startsWith('破折号'))).toBe(true);
+    expect(normal.failures.some((item) => item.startsWith('冒号'))).toBe(false);
     expect(normal.warnings.some((item) => item.startsWith('冒号'))).toBe(true);
-    expect(normal.warnings.some((item) => item.startsWith('破折号'))).toBe(true);
     expect(strict.failures.some((item) => item.startsWith('冒号'))).toBe(true);
     expect(strict.failures.some((item) => item.startsWith('破折号'))).toBe(true);
+  });
+
+  test('段首模型路标和长前置成分报告自身所在行号', () => {
+    const roadSign = checkProse('上一段结束。\n\n值得注意的是，数据没有变化。');
+    expect(roadSign.failures.some((item) => item.includes('第 3 行') && item.includes('值得注意的是'))).toBe(true);
+
+    const leftBranch = checkProse([
+      '上一段结束。',
+      '',
+      '在项目已经进入验收并且预算全部用完的情况下，团队才发现接口没有对上。',
+      '在设备完成三轮巡检并且记录逐条归档的过程中，值班员又补了一次抽查。',
+      '在方案经过两次评审并且风险列表确认关闭的背景下，上线时间才定下来。',
+    ].join('\n'));
+    const sample = leftBranch.warnings.find((item) => item.startsWith('长前置成分'));
+    expect(sample).toBeDefined();
+    expect(sample).toContain('第 3 行');
+    expect(sample).not.toContain('第 1 行');
   });
 });

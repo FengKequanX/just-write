@@ -35,7 +35,7 @@ Revise in order. Save prohibition lists for the fifth pass: first rescue the per
 
 - Load `humanizer-zh` only now and apply its hard prohibitions one by one.
 - Run `bun <humanizer-zh>/scripts/check-prose.ts <draft.md>` and revise until all hard failures are zero.
-- Treat warnings as prompts for human judgment. Punctuation warnings also become failures under `--strict`.
+- Treat warnings as prompts for human judgment. Dashes in body prose are hard failures by default; colon warnings also become failures under `--strict`.
 
 ### 6. Verify reality
 

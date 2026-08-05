@@ -311,6 +311,13 @@ function punctuationMessage(label: string, matches: Match[], original: string): 
   return `${label}共 ${matches.length} 处，出现在第 ${lines} 行。`;
 }
 
+// 段首命中时，模式里的 (?:^|[。！？!?]\s*) 会把上一段末尾的标点吞进匹配，
+// 行号要从剥掉前导标点后的位置算起。
+function stripLeadingPunctuation(match: Match): Match {
+  const text = match.text.replace(/^[。！？!?\s]+/, '');
+  return { index: match.index + (match.text.length - text.length), text };
+}
+
 export function checkProse(text: string, options: { strict?: boolean } = {}): CheckResult {
   const prose = maskNonProse(text);
   const totalHan = hanCount(prose);
@@ -318,14 +325,14 @@ export function checkProse(text: string, options: { strict?: boolean } = {}): Ch
   const warnings: string[] = [];
 
   const punctuationText = options.strict ? prose : maskDefaultColonExemptions(prose);
-  const punctuation = [
-    { label: '冒号', matches: symbolMatches(punctuationText, /[:：]/g) },
-    { label: '破折号', matches: symbolMatches(prose, /——|—|–/g) },
-  ];
-  for (const item of punctuation) {
-    if (!item.matches.length) continue;
-    const message = punctuationMessage(item.label, item.matches, text);
+  const colonMatches = symbolMatches(punctuationText, /[:：]/g);
+  if (colonMatches.length) {
+    const message = punctuationMessage('冒号', colonMatches, text);
     (options.strict ? failures : warnings).push(message);
+  }
+  const dashMatches = symbolMatches(prose, /——|—|–/g);
+  if (dashMatches.length) {
+    failures.push(punctuationMessage('破折号', dashMatches, text));
   }
 
   const stopMatches = nonOverlappingTerms(prose, HARD_STOPS);
@@ -349,7 +356,8 @@ export function checkProse(text: string, options: { strict?: boolean } = {}): Ch
 
   const roadSigns = allMatches(prose, ROAD_SIGN_PATTERNS);
   for (const match of roadSigns) {
-    failures.push(`模型路标，第 ${lineNumber(text, match.index)} 行，“${excerpt(match.text.replace(/^[。！？!?\s]+/, ''))}”`);
+    const stripped = stripLeadingPunctuation(match);
+    failures.push(`模型路标，第 ${lineNumber(text, stripped.index)} 行，“${excerpt(stripped.text)}”`);
   }
 
   const pivots = allMatches(prose, PIVOT_PATTERNS);
@@ -364,7 +372,7 @@ export function checkProse(text: string, options: { strict?: boolean } = {}): Ch
     warnings.push(`洞察路标共 ${markerMatches.length} 处，当前提醒线为 ${markerLimit} 处。重点检查 ${samples}。`);
   }
 
-  const leftBranches = allMatches(prose, LEFT_BRANCH_PATTERNS);
+  const leftBranches = allMatches(prose, LEFT_BRANCH_PATTERNS).map(stripLeadingPunctuation);
   const leftLimit = Math.max(2, Math.floor(totalHan / 1200));
   if (leftBranches.length > leftLimit) {
     const samples = leftBranches.slice(0, 4).map((match) => `第 ${lineNumber(text, match.index)} 行“${excerpt(match.text, 44)}”`).join('；');
