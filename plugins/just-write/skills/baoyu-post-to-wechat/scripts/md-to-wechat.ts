@@ -14,6 +14,10 @@ import {
   serializeFrontmatter,
   stripWrappingQuotes,
 } from "baoyu-md";
+import {
+  applyWechatEditorialTypography,
+  XHS_DEFAULT_ACCENT,
+} from "./wechat-typography.ts";
 
 interface ImageInfo {
   placeholder: string;
@@ -66,13 +70,18 @@ export async function convertMarkdown(
     `[md-to-wechat] Rendering markdown with theme: ${options?.theme ?? "default"}${options?.color ? `, color: ${options.color}` : ""}, citeStatus: ${citeStatus}`,
   );
 
-  const { html } = await renderMarkdownDocument(rewrittenMarkdown, {
+  const theme = options?.theme ?? "default";
+  const configuredColor = resolveColorToken(options?.color);
+  const rendered = await renderMarkdownDocument(rewrittenMarkdown, {
     citeStatus,
     defaultTitle: title,
     keepTitle: false,
-    primaryColor: resolveColorToken(options?.color),
+    primaryColor: theme === "default" ? configuredColor ?? XHS_DEFAULT_ACCENT : configuredColor,
     theme: options?.theme,
   });
+  const html = theme === "default"
+    ? applyWechatEditorialTypography(rendered.html, rendered.style.primaryColor)
+    : rendered.html;
   fs.writeFileSync(htmlPath, html, "utf-8");
 
   const contentImages = await resolveContentImages(images, baseDir, tempDir, "md-to-wechat");

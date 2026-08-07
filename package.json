@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "setup": "bun install --cwd plugins/just-write/skills/post-to-xhs/scripts",
-    "test": "bun test plugins/just-write/skills/just-write/scripts plugins/just-write/skills/humanizer-zh/scripts plugins/just-write/skills/post-to-xhs/scripts plugins/just-write/skills/sync-to-douyin/scripts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-extend-config.test.ts",
+    "test": "bun test plugins/just-write/skills/just-write/scripts plugins/just-write/skills/humanizer-zh/scripts plugins/just-write/skills/post-to-xhs/scripts plugins/just-write/skills/sync-to-douyin/scripts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-extend-config.test.ts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-typography.test.ts",
     "check:contracts": "bun scripts/check-contracts.ts"
   }
 }
