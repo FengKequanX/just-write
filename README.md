@@ -178,6 +178,8 @@ bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[
 
 小红书默认读取文章目录内的 `imgs/cover-xhs.png`。如需显式覆盖，可在 frontmatter 使用 `xhsCoverImage`；不会读取公众号的 `imgs/cover.png`。
 
+竖版画布会保持 4:3 封面图横向满宽；长标题或摘要占用空间过多时，渲染器先均匀收紧上下边距和区块间距，再在可读范围内缩小文字，避免压缩图片产生两侧留白。
+
 ## 抖音同步配置
 
 抖音上传基于 [social-auto-upload](https://github.com/dreammis/social-auto-upload)。建议安装到文章项目的 `.baoyu-skills/`：

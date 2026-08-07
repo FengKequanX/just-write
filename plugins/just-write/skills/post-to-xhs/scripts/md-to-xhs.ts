@@ -675,7 +675,7 @@ export function buildCoverHtml(
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
-<body class="cover${coverImage ? '' : ' cover--text-only'}" style="${dims}">
+<body class="cover${coverImage ? ' cover--with-image' : ' cover--text-only'}" style="${dims}">
   <div class="cover-content">
     <div class="cover-kicker"><span class="kicker-dot"></span><span>${escapeHtml(author)}</span></div>
     ${coverImage ? `<div class="cover-image" style="--cover-source-ratio:${escapeHtml(coverAspectRatio)}"><img class="cover-image-bg" src="${escapeHtml(coverImage)}" alt="" aria-hidden="true"><img class="cover-image-fg" src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
@@ -688,6 +688,63 @@ export function buildCoverHtml(
       <span>共 ${String(totalPages).padStart(2, '0')} 页 · 右滑阅读</span>
     </div>
   </div>
+  ${coverImage ? `<script>
+    (() => {
+      const root = document.body;
+      const content = root.querySelector('.cover-content');
+      if (!content || root.clientHeight <= root.clientWidth) return;
+
+      const values = {
+        topPadding: 56,
+        bottomPadding: 56,
+        imageGap: 24,
+        titleGap: 44,
+        subtitleGap: 22,
+        footerGap: 22,
+        titleSize: 64,
+        subtitleSize: 29,
+      };
+      const minimums = {
+        topPadding: 44,
+        bottomPadding: 44,
+        imageGap: 20,
+        titleGap: 32,
+        subtitleGap: 12,
+        footerGap: 14,
+        titleSize: 46,
+        subtitleSize: 22,
+      };
+      const gapKeys = ['topPadding', 'bottomPadding', 'imageGap', 'titleGap', 'subtitleGap', 'footerGap'];
+      const fontKeys = ['titleSize', 'subtitleSize'];
+      const cssNames = {
+        topPadding: '--cover-top-padding',
+        bottomPadding: '--cover-bottom-padding',
+        imageGap: '--cover-image-gap',
+        titleGap: '--cover-title-gap',
+        subtitleGap: '--cover-subtitle-gap',
+        footerGap: '--cover-footer-gap',
+        titleSize: '--cover-title-size',
+        subtitleSize: '--cover-subtitle-size',
+      };
+      const overflows = () => content.scrollHeight > content.clientHeight + 1;
+      const reduce = (keys, amount) => {
+        let changed = false;
+        for (const key of keys) {
+          if (values[key] <= minimums[key]) continue;
+          values[key] = Math.max(minimums[key], values[key] - amount);
+          root.style.setProperty(cssNames[key], values[key] + 'px');
+          changed = true;
+        }
+        return changed;
+      };
+
+      let adjusted = false;
+      while (overflows() && reduce(gapKeys, 2)) adjusted = true;
+      while (overflows() && reduce(fontKeys, 1)) adjusted = true;
+      root.dataset.coverFit = adjusted ? 'compact' : 'default';
+      root.dataset.coverOverflow = overflows() ? 'true' : 'false';
+    })();
+  </script>` : ''}
 </body></html>`;
 }
 

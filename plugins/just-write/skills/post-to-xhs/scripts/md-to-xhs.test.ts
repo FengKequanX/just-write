@@ -35,6 +35,14 @@ describe('XHS rendering contracts', () => {
     expect(html).toContain('cover cover--text-only');
   });
 
+  test('locks portrait cover images and fits text before allowing overflow', () => {
+    const html = buildCoverHtml('较长的封面标题', 'cover.png', '4 / 3', '作者', '', 1, 2, '', 1440, '摘要');
+    expect(html).toContain('cover cover--with-image');
+    expect(html).toContain("const gapKeys = ['topPadding', 'bottomPadding', 'imageGap', 'titleGap', 'subtitleGap', 'footerGap']");
+    expect(html).toContain("const fontKeys = ['titleSize', 'subtitleSize']");
+    expect(html).toContain("root.dataset.coverOverflow = overflows() ? 'true' : 'false'");
+  });
+
   test('uses imgs/cover-xhs.png instead of the WeChat cover', () => {
     const root = tempRoot();
     fs.mkdirSync(path.join(root, 'imgs'));

@@ -40,8 +40,16 @@ body {
 /* ==================== Cover Page ==================== */
 
 .cover {
+  --cover-top-padding: 56px;
+  --cover-bottom-padding: 56px;
+  --cover-image-gap: 24px;
+  --cover-title-gap: 44px;
+  --cover-title-size: 64px;
+  --cover-subtitle-gap: 22px;
+  --cover-subtitle-size: 29px;
+  --cover-footer-gap: 22px;
   background: var(--bg);
-  padding: 84px 72px 64px;
+  padding: var(--cover-top-padding) 72px var(--cover-bottom-padding);
   position: relative;
   overflow: hidden;
 }
@@ -77,7 +85,7 @@ body {
   width: calc(100% + 144px);
   aspect-ratio: var(--cover-source-ratio, 4 / 3);
   max-height: 56vh;
-  margin: 44px -72px 0;
+  margin: var(--cover-image-gap) -72px 0;
   border-radius: 0;
   overflow: hidden;
   border: none;
@@ -85,6 +93,12 @@ body {
   background: var(--bg-warm);
   position: relative;
   isolation: isolate;
+}
+
+@media (orientation: portrait) {
+  .cover--with-image .cover-image {
+    flex-shrink: 0;
+  }
 }
 
 .cover .cover-image::after {
@@ -123,12 +137,12 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 1;
-  margin-top: 56px;
+  margin-top: var(--cover-title-gap);
 }
 
 .cover .title {
   font-family: var(--font-body);
-  font-size: 64px;
+  font-size: var(--cover-title-size);
   font-weight: 700;
   line-height: 1.22;
   max-width: 940px;
@@ -138,8 +152,8 @@ body {
 }
 
 .cover .subtitle {
-  margin-top: 26px;
-  font-size: 29px;
+  margin-top: var(--cover-subtitle-gap);
+  font-size: var(--cover-subtitle-size);
   color: var(--text-sec);
   line-height: 1.75;
   max-width: 880px;
@@ -151,7 +165,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 26px;
+  padding-top: var(--cover-footer-gap);
   border-top: 1px solid rgba(23, 23, 27, 0.22);
   font-family: var(--font-mono);
   font-size: 18px;
