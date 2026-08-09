@@ -20,6 +20,8 @@ describe("applyWechatEditorialTypography", () => {
 
     expect(result).toContain("font-family: Songti SC, SimSun");
     expect(result).toContain("font-family: KaiTi, STKaiti");
+    expect(result).toContain("margin: 1.5em 0");
+    expect(result).toContain("font-size: 18px; font-weight: 700; line-height: 1.65");
     expect(result).toContain("border-left: 4px solid #285680");
     expect(result).toContain("background: transparent");
     expect(result).toContain("text-indent: -1.2em");
@@ -57,6 +59,7 @@ describe("applyWechatEditorialTypography", () => {
 
     expect(result).toContain("background: #FBFAF7");
     expect(result).toContain("border-left: 4px solid #D4563F");
-    expect(result).toContain("border-top: 2px solid #D4563F");
+    expect(result).toContain("display: none; width: 0; height: 0; margin: 0; border: 0");
+    expect(result).not.toContain("border-top: 2px solid #D4563F");
   });
 });
