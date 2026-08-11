@@ -6,8 +6,10 @@ import {
   buildCoverHtml,
   buildEndingHtml,
   commitGeneratedOutput,
+  generateCaption,
   parseXhsArgs,
   render,
+  resolveCaptionTopics,
   resolveCoverImage,
   type RenderResult,
 } from './md-to-xhs';
@@ -87,7 +89,7 @@ describe('XHS rendering contracts', () => {
     fs.writeFileSync(cover, 'new');
     fs.writeFileSync(ending, 'new');
     fs.writeFileSync(caption, 'caption');
-    const result: RenderResult = { images: [cover, ending], captionPath: caption, title: '标题', totalPages: 2 };
+    const result: RenderResult = { images: [cover, ending], captionPath: caption, title: '标题', topics: [], totalPages: 2 };
 
     const committed = commitGeneratedOutput(result, staging, output);
     expect(fs.existsSync(path.join(output, '99-content-stale.png'))).toBe(false);
@@ -107,6 +109,22 @@ describe('XHS rendering contracts', () => {
     expect(options).toMatchObject({
       markdownPath: 'article.md', aspect: '1:1', author: 'CLI作者', tags: '配置标签',
     });
+  });
+
+  test('uses only article-specific topics when they are provided', () => {
+    const topics = resolveCaptionTopics(
+      '英伟达要让 5000 亿美元涌向 AI 工厂',
+      '正文同时提到了 OpenAI、融资、开发者和代码。',
+      { description: '乌兰察布把绿电转化为可出售的算力。' },
+      'AI工厂,乌兰察布,算力产业,基础设施投资,AI工厂,',
+    );
+    const caption = generateCaption('标题', '作者', {}, topics);
+
+    expect(topics).toEqual(['AI工厂', '乌兰察布', '算力产业', '基础设施投资']);
+    expect(caption).toContain('#AI工厂 #乌兰察布 #算力产业 #基础设施投资');
+    expect(caption).not.toContain('#OpenAI');
+    expect(caption).not.toContain('#编程');
+    expect(caption).not.toContain('#融资');
   });
 
   test('paginates nested structures, long prose, code, and tables without clipping', async () => {

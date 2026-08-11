@@ -16,6 +16,7 @@ import {
 } from "baoyu-md";
 import {
   applyWechatEditorialTypography,
+  normalizeReferenceMarkdown,
   XHS_DEFAULT_ACCENT,
 } from "./wechat-typography.ts";
 
@@ -57,8 +58,9 @@ export async function convertMarkdown(
     summary = extractSummaryFromBody(body, 120);
   }
 
+  const normalizedBody = normalizeReferenceMarkdown(body);
   const { images, markdown: rewrittenBody } = replaceMarkdownImagesWithPlaceholders(
-    body,
+    normalizedBody,
     "WECHATIMGPH_",
   );
   const rewrittenMarkdown = `${serializeFrontmatter(frontmatter)}${rewrittenBody}`;

@@ -54,6 +54,110 @@ function styleBlockChildren(
   return html.replace(pattern, (block) => styleTags(block, childTag, style));
 }
 
+const REFERENCE_HEADING = /^(?:引用链接|资料来源|参考资料|参考来源|参考链接|references?|sources?)[:：]?$/i;
+const REFERENCE_LINE_STYLE = `margin: 0.6em 0; padding: 0; color: ${MUTED}; font-size: 13px; line-height: 1.7; letter-spacing: 0; text-indent: 0; word-break: break-all;`;
+
+function isReferenceHeading(html: string): boolean {
+  const text = html.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").trim();
+  return REFERENCE_HEADING.test(text);
+}
+
+function italicizeBareUrls(html: string): string {
+  let italicDepth = 0;
+  return html.split(/(<[^>]+>)/g).map((part) => {
+    if (part.startsWith("<")) {
+      if (/^<\/(?:i|em)\b/i.test(part)) italicDepth = Math.max(0, italicDepth - 1);
+      else if (/^<(?:i|em)\b/i.test(part) && !/\/>$/.test(part)) italicDepth += 1;
+      return part;
+    }
+    if (italicDepth > 0) return part;
+    return part.replace(
+      /https?:\/\/[^\s<>"'，。；;）)]+/gi,
+      (url) => `<i style="word-break: break-all;">${url}</i>`,
+    );
+  }).join("");
+}
+
+function styleReferenceBlock(block: string): string {
+  let output = block.replace(
+    /<a\b([^>]*\bhref=(["'])(https?:\/\/.*?)\2[^>]*)>[\s\S]*?<\/a>/gi,
+    (_match, attributes: string, _quote: string, href: string) => (
+      `<a${attributes}><i style="word-break: break-all;">${href}</i></a>`
+    ),
+  );
+  output = italicizeBareUrls(output);
+  output = output.replace(/(<li\b[^>]*>)\s*(?:•|[-–—])\s*/gi, "$1");
+  output = styleTags(output, "p", REFERENCE_LINE_STYLE);
+  output = styleTags(output, "li", REFERENCE_LINE_STYLE);
+  output = styleTags(output, "ul", "margin: 0; padding: 0; list-style: none;");
+  output = styleTags(output, "ol", "margin: 0; padding: 0; list-style: none;");
+  output = styleTags(output, "a", "color: inherit; text-decoration: none; word-break: break-all;");
+  output = styleTags(output, "strong", "color: inherit; background: none; font-size: inherit; font-weight: 400;");
+  output = styleTags(output, "em", "color: inherit; font-family: inherit; font-size: inherit; font-style: italic;");
+  output = styleTags(output, "i", "color: inherit; font-family: inherit; font-size: inherit; font-style: italic;");
+  return output;
+}
+
+function styleReferenceSections(html: string): string {
+  const headingPattern = /<h([1-6])\b[^>]*>[\s\S]*?<\/h\1>/gi;
+  const headings = [...html.matchAll(headingPattern)];
+  let cursor = 0;
+  let output = "";
+
+  for (let index = 0; index < headings.length; index++) {
+    const heading = headings[index]!;
+    if (!isReferenceHeading(heading[0])) continue;
+
+    const start = (heading.index ?? 0) + heading[0].length;
+    const nextHeadingStart = headings[index + 1]?.index ?? html.length;
+    const sectionEnd = html.indexOf("</section>", start);
+    const end = sectionEnd >= 0 && sectionEnd < nextHeadingStart ? sectionEnd : nextHeadingStart;
+
+    output += html.slice(cursor, start);
+    output += styleReferenceBlock(html.slice(start, end));
+    cursor = end;
+  }
+
+  return cursor === 0 ? html : output + html.slice(cursor);
+}
+
+export function normalizeReferenceMarkdown(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const citedNumbers = new Set(
+    [...markdown.matchAll(/(?<!!)\[(\d+)\](?!\()/g)].map((match) => Number(match[1])),
+  );
+  let inReferenceSection = false;
+
+  return lines.map((originalLine) => {
+    const heading = originalLine.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      inReferenceSection = REFERENCE_HEADING.test(heading[1]!.trim());
+      return originalLine;
+    }
+    if (!inReferenceSection) return originalLine;
+
+    let line = originalLine.replace(
+      /(?<!!)\[[^\]]*\]\((https?:\/\/[^)\s]+)(?:\s+["'][^"']*["'])?\)/gi,
+      (_match, url: string) => `[${url}](${url})`,
+    );
+
+    const ordered = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/);
+    if (ordered && !citedNumbers.has(Number(ordered[2]))) {
+      line = `${ordered[1]}- ${ordered[3]}`;
+    }
+
+    const sourceLink = line.match(/^(\s*(?:(?:[-*+]|\d+[.)])\s+|\[\d+\]\s+)?)(.*?)(\[https?:\/\/[^\]]+\]\(https?:\/\/[^)]+\))\s*$/i);
+    if (sourceLink) {
+      const prefix = sourceLink[1]!;
+      const title = sourceLink[2]!.trimEnd();
+      const separator = !title || /[：:](?:\*\*|__)?\s*$/.test(title) ? "" : "：";
+      line = `${prefix}${title}${separator}${sourceLink[3]}`;
+    }
+
+    return line;
+  }).join("\n");
+}
+
 /**
  * Adds a restrained, editorial reading rhythm to baoyu-md's default theme.
  * Styles stay inline because WeChat strips or rewrites stylesheet rules on paste.
@@ -119,6 +223,8 @@ export function applyWechatEditorialTypography(
     "footnotes",
     `margin: 0.6em 0; color: ${MUTED}; font-size: 13px; line-height: 1.7; letter-spacing: 0;`,
   );
+
+  output = styleReferenceSections(output);
 
   return output;
 }

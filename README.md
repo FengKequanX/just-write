@@ -161,22 +161,25 @@ enabled: true
 default_author: 作者名
 default_theme: default
 default_aspect: "3:4"
+# 仅供直接调用 CLI 时兜底；插件流程会为每篇文章重新生成话题
 default_topic_tags: AI观察,科技,编程
 ```
 
 只接受上面五个键。v1.3.0 不兼容旧的宽高比键和 dry-run 配置；发现已移除或未知键时会直接给出迁移错误。
 
-CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目录配置。
+CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目录配置。插件流程不会复用固定话题：每次都从当篇文章的标题、摘要和核心观点提炼 3–5 个话题，并通过 `--tags` 显式传入；`caption.md` 与结束页只使用这组当篇话题。
 
 独立生成命令：
 
 ```bash
-bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md" --out "[文章标题]/xhs"
+bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md" --out "[文章标题]/xhs" --tags "当篇主题,具体对象,核心概念"
 ```
 
 渲染先写入临时目录，全部成功后才替换 `xhs/` 中受管的编号 PNG 和 `caption.md`，避免失败或页数变少时留下旧页面；无关文件不会被删除。
 
 小红书默认读取文章目录内的 `imgs/cover-xhs.png`。如需显式覆盖，可在 frontmatter 使用 `xhsCoverImage`；不会读取公众号的 `imgs/cover.png`。
+
+公众号排版会把 `引用链接`、`资料来源`、`参考资料`、`参考来源` 和 `参考链接` 统一为小号灰色来源样式：`13px` 字号、`1.7` 行高、零字距、网址斜体。来源条目显示为 `来源标题：https://...`；仅当正文原本含 `[1]` 这类引用标记时保留对应编号，否则不添加编号。
 
 竖版画布会保持 4:3 封面图横向满宽；长标题或摘要占用空间过多时，渲染器先均匀收紧上下边距和区块间距，再在可读范围内缩小文字，避免压缩图片产生两侧留白。
 

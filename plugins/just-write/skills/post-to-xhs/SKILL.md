@@ -34,15 +34,28 @@ default_topic_tags: AI观察,科技,编程
 
 `default_aspect_ratio` and `dry_run` were removed and must produce a migration error. CLI arguments override configuration. Supported aspects are `3:4`, `9:16`, `1:1`, and `4:3`; the only bundled theme is `default`.
 
+Treat `default_topic_tags` as a compatibility fallback for direct CLI use only. During skill execution, never reuse it as the article's topics.
+
+## Select article topics
+
+Before rendering, derive 3-5 topics from this article's locked title, summary, and core argument. Every topic must be directly supported by the current article:
+
+- Prefer the central subject plus its specific entities, concepts, industry, or reader use case.
+- Keep the set narrow enough that all topics describe the same article.
+- Do not pad the set with generic defaults such as `科技`, `AI观察`, or `编程` unless that concept is central to the article.
+- Do not carry topics over from another article or append keyword matches after the set is chosen.
+
+Pass the derived set through `--tags`. When article-specific topics are supplied, the renderer uses exactly that set, deduplicated and capped at five.
+
 ## Run
 
 Resolve Bun as `bun`, or use `npx -y bun` when Bun is unavailable. Then run:
 
 ```bash
-bun <this-skill>/scripts/md-to-xhs.ts <article-dir>/<title>-formatted.md --out <article-dir>/xhs
+bun <this-skill>/scripts/md-to-xhs.ts <article-dir>/<title>-formatted.md --out <article-dir>/xhs --tags "<topic-1>,<topic-2>,<topic-3>"
 ```
 
-Optional arguments: `--theme`, `--aspect`, `--author`, and `--tags`.
+Other optional arguments: `--theme`, `--aspect`, and `--author`. The skill workflow always supplies article-specific `--tags`.
 
 The renderer reads configuration itself, validates all options, renders into a staging directory, and replaces only managed numbered PNG files plus `caption.md` after success. Unrelated files in `xhs/` remain untouched.
 
@@ -57,4 +70,4 @@ xhs/
 └── caption.md
 ```
 
-Report the input, configuration source, aspect, image count, exact output paths, title, and topics. End by telling the user to upload the materials manually. When invoked by `just-write`, update XHS workflow status to `generated` only after the renderer succeeds.
+Verify that `caption.md` contains only the selected article-specific topics. Report the input, configuration source, aspect, image count, exact output paths, title, and topics. End by telling the user to upload the materials manually. When invoked by `just-write`, update XHS workflow status to `generated` only after the renderer succeeds.

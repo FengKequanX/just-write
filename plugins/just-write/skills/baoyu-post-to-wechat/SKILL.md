@@ -394,6 +394,12 @@ API发布失败：IP不在白名单内。
 - Use `--no-cite` only if the user explicitly wants to keep ordinary external links inline.
 - Existing HTML input is left as-is; no extra citation conversion is applied.
 
+**Reference and source sections**:
+- Normalize headings such as `引用链接`, `资料来源`, `参考资料`, `参考来源`, and `参考链接` to the same small citation typography used by generated bottom citations: muted 13px text, `1.7` line height, zero letter spacing, and italic URLs.
+- Write each entry as `来源标题：[https://...](https://...)`; display the real URL instead of labels such as `原文链接`.
+- Preserve a number only when the original body already contains the matching citation marker such as `[1]`. Otherwise use an unnumbered source entry and never invent sequential numbers.
+- Keep source titles regular weight. Do not make them bold or give source links the normal inline-link underline.
+
 **API method** (accepts `.md` or `.html`):
 
 ```bash

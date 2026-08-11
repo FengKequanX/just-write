@@ -49,6 +49,7 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 };
 
 const DEFAULT_ASPECT = '3:4';
+const MAX_TOPIC_TAGS = 5;
 const CONTENT_TOP_PAD = 70;
 const CONTENT_BOTTOM_PAD = 88;
 const PAGE_NUM_HEIGHT = 0;
@@ -569,7 +570,6 @@ function buildPageSections(
   sections: MarkdownSection[],
   fm: Frontmatter,
   author: string,
-  topicTags: string,
   baseDir: string,
 ): PageSection[] {
   const pages: PageSection[] = [];
@@ -620,10 +620,6 @@ function buildPageSections(
     });
   }
 
-  const tags = topicTags
-    ? topicTags.split(',').map((t) => t.trim()).filter(Boolean)
-    : [];
-
   pages.push({
     type: 'ending',
     title: '',
@@ -631,7 +627,7 @@ function buildPageSections(
     rawTokens: [],
     layout: 'prose',
     slug: 'ending',
-    tags,
+    tags: [],
     author: author || fm.author || '作者名',
   });
 
@@ -1451,22 +1447,14 @@ export function buildEndingHtml(
 
 // --- Caption Generation ---
 
-function generateCaption(
+export function generateCaption(
   title: string,
-  body: string,
   author: string,
   fm: Frontmatter,
-  topicTags: string,
+  topics: string[],
 ): string {
   const description = fm.description || fm.summary || '';
-
-  const userTags = topicTags
-    ? topicTags.split(',').map((t) => t.trim()).filter(Boolean)
-    : [];
-
-  const contentTags = extractContentTags(body);
-  const allTags = [...new Set([...userTags, ...contentTags])];
-  const tagStr = allTags.map((t) => `#${t}`).join(' ');
+  const tagStr = topics.map((topic) => `#${topic}`).join(' ');
 
   return [
     title,
@@ -1477,6 +1465,35 @@ function generateCaption(
     '',
     `— ${author || '作者名'}`,
   ].join('\n');
+}
+
+function parseTopicTags(topicTags: string): string[] {
+  const seen = new Set<string>();
+  const topics: string[] = [];
+
+  for (const rawTag of topicTags.split(',')) {
+    const topic = rawTag.trim().replace(/^#+/, '').replace(/\s+/g, '');
+    const key = topic.toLocaleLowerCase();
+    if (!topic || seen.has(key)) continue;
+    seen.add(key);
+    topics.push(topic);
+    if (topics.length === MAX_TOPIC_TAGS) break;
+  }
+
+  return topics;
+}
+
+export function resolveCaptionTopics(
+  title: string,
+  body: string,
+  fm: Frontmatter,
+  topicTags: string,
+): string[] {
+  const articleTopics = parseTopicTags(topicTags);
+  if (articleTopics.length > 0) return articleTopics;
+
+  const searchableContent = [title, fm.description || fm.summary || '', body].join('\n');
+  return extractContentTags(searchableContent);
 }
 
 function extractContentTags(body: string): string[] {
@@ -1502,7 +1519,7 @@ function extractContentTags(body: string): string[] {
     if (text.includes(kw)) tags.push(tag);
   }
 
-  return tags.slice(0, 6);
+  return tags.slice(0, MAX_TOPIC_TAGS);
 }
 
 // --- Main Render ---
@@ -1511,6 +1528,7 @@ export interface RenderResult {
   images: string[];
   captionPath: string;
   title: string;
+  topics: string[];
   totalPages: number;
 }
 
@@ -1531,7 +1549,11 @@ export async function render(
 
   const tokens = marked.lexer(body);
   const sections = splitByHeadings(tokens);
-  const pages = buildPageSections(sections, fm, resolvedAuthor, topicTags, baseDir);
+  const pages = buildPageSections(sections, fm, resolvedAuthor, baseDir);
+  const title = pages.find((p) => p.type === 'cover')?.title || fm.title || '未命名';
+  const topics = resolveCaptionTopics(title, body, fm, topicTags);
+  const endingPage = pages.find((page) => page.type === 'ending');
+  if (endingPage) endingPage.tags = topics;
   const css = loadCss(theme);
   const contentWidth = size.width - CONTENT_SIDE_PAD * 2;
   const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT;
@@ -1622,12 +1644,11 @@ export async function render(
     }
   }
 
-  const title = pages.find((p) => p.type === 'cover')?.title || fm.title || '未命名';
-  const caption = generateCaption(title, body, resolvedAuthor, fm, topicTags);
+  const caption = generateCaption(title, resolvedAuthor, fm, topics);
   const captionPath = path.join(outDir, 'caption.md');
   fs.writeFileSync(captionPath, caption, 'utf-8');
 
-  return { images, captionPath, title, totalPages };
+  return { images, captionPath, title, topics, totalPages };
 }
 
 const GENERATED_XHS_FILE = /^(?:\d{2,}-.*\.png|caption\.md)$/i;
@@ -1667,7 +1688,7 @@ Options:
   --theme <name>    Theme name (default: default)
   --aspect <ratio>  Aspect ratio: 3:4 | 9:16 | 1:1 | 4:3 (default: 3:4)
   --author <name>   Author name
-  --tags <tags>     Comma-separated topic tags
+  --tags <tags>     3-5 article-specific topic tags, comma-separated
   --help            Show this help
 
 Environment:

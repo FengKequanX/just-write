@@ -243,6 +243,8 @@ Apply formatting guided by the Step 2 analysis. The goal is making the content s
 | Blockquotes | Notable quotes, important warnings, cited text | `> quote` |
 | Separators | Major topic transitions | `---` |
 
+For `引用链接`, `资料来源`, `参考资料`, `参考来源`, or `参考链接` sections, normalize every entry to `来源标题：[https://...](https://...)`. Keep an ordered number only when the body already contains the matching citation marker such as `[1]`; otherwise use unnumbered entries. Do not use `原文链接` as the visible link text and do not bold source titles. The WeChat renderer applies the shared small citation typography.
+
 **Formatting principles — what NOT to do:**
 - Do NOT add sentences, explanations, or commentary
 - Do NOT delete or shorten any content

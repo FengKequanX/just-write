@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { renderMarkdownDocument } from "baoyu-md";
 
-import { applyWechatEditorialTypography } from "./wechat-typography.ts";
+import {
+  applyWechatEditorialTypography,
+  normalizeReferenceMarkdown,
+  XHS_DEFAULT_ACCENT,
+} from "./wechat-typography.ts";
 
 describe("applyWechatEditorialTypography", () => {
   test("adds the editorial hierarchy as inline styles", () => {
@@ -61,5 +66,56 @@ describe("applyWechatEditorialTypography", () => {
     expect(result).toContain("border-left: 4px solid #D4563F");
     expect(result).toContain("display: none; width: 0; height: 0; margin: 0; border: 0");
     expect(result).not.toContain("border-top: 2px solid #D4563F");
+  });
+
+  test("normalizes unnumbered source sections without inventing citation numbers", () => {
+    const markdown = `正文没有引用编号。\n\n## 资料来源\n\n1. **官方公告：** [原文链接](https://example.com/news)`;
+    const result = normalizeReferenceMarkdown(markdown);
+
+    expect(result).toContain('- **官方公告：**[https://example.com/news](https://example.com/news)');
+    expect(result).not.toContain('1. **官方公告');
+  });
+
+  test("keeps source numbers that correspond to original citation markers", () => {
+    const markdown = `这项结论见原文[1]。\n\n## 引用链接\n\n1. 研究报告：[原文](https://example.com/report)`;
+    const result = normalizeReferenceMarkdown(markdown);
+
+    expect(result).toContain('1. 研究报告：[https://example.com/report](https://example.com/report)');
+  });
+
+  test("styles manual sources like generated citation links", () => {
+    const html = `
+      <section>
+        <h2>资料来源</h2>
+        <ul><li>• <strong>官方公告：</strong> <a href="https://example.com/news">原文链接</a></li></ul>
+      </section>
+    `;
+    const result = applyWechatEditorialTypography(html);
+
+    expect(result).toContain('font-size: 13px; line-height: 1.7; letter-spacing: 0');
+    expect(result).toContain('font-weight: 400');
+    expect(result).toContain('text-decoration: none');
+    expect(result).toContain('<i style="word-break: break-all; color: inherit;');
+    expect(result).toContain('>https://example.com/news</i>');
+    expect(result).not.toContain('>• ');
+  });
+
+  test("keeps normalized sources out of duplicate generated footnotes", async () => {
+    const markdown = normalizeReferenceMarkdown(
+      `## 正文\n\n正文没有引用编号。\n\n## 资料来源\n\n1. 官方公告：[原文链接](https://example.com/news)`,
+    );
+    const rendered = await renderMarkdownDocument(markdown, {
+      citeStatus: true,
+      defaultTitle: "测试",
+      keepTitle: false,
+      primaryColor: XHS_DEFAULT_ACCENT,
+      theme: "default",
+    });
+    const result = applyWechatEditorialTypography(rendered.html, rendered.style.primaryColor);
+
+    expect(result).not.toContain("引用链接");
+    expect(result).toContain(">https://example.com/news</i>");
+    expect(result).toContain("font-size: 13px; line-height: 1.7; letter-spacing: 0");
+    expect(result).not.toContain("text-decoration: underline");
   });
 });
