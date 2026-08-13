@@ -138,17 +138,28 @@ body {
   flex-direction: column;
   z-index: 1;
   margin-top: var(--cover-title-gap);
+  width: 100%;
+}
+
+.cover--with-image {
+  --cover-title-gap: 38px;
+  --cover-title-size: 60px;
 }
 
 .cover .title {
-  font-family: var(--font-body);
+  width: 100%;
+  max-width: none;
+  font-family: "Noto Serif SC", "STZhongsong", "华文中宋", "Songti SC", "SimSun", serif;
   font-size: var(--cover-title-size);
   font-weight: 700;
-  line-height: 1.22;
-  max-width: 940px;
+  line-height: 1.3;
   color: var(--text);
-  letter-spacing: 0;
-  text-wrap: balance;
+  letter-spacing: -1px;
+  text-align: left;
+  white-space: normal;
+  text-wrap: wrap;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .cover .subtitle {

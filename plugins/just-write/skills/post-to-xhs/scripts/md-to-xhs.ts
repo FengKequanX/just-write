@@ -248,6 +248,13 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+export function normalizeStrongAdjacency(markdown: string): string {
+  return markdown.replace(
+    /\*\*([^*\r\n]+?)\*\*(?=[\p{L}\p{N}])/gu,
+    '**$1**<!-- -->',
+  );
+}
+
 function resolveImagePaths(html: string, baseDir: string): string {
   return html.replace(
     /(<img\s[^>]*src=["'])(?!https?:|data:|file:)([^"']+)/g,
@@ -677,7 +684,7 @@ export function buildCoverHtml(
     ${coverImage ? `<div class="cover-image" style="--cover-source-ratio:${escapeHtml(coverAspectRatio)}"><img class="cover-image-bg" src="${escapeHtml(coverImage)}" alt="" aria-hidden="true"><img class="cover-image-fg" src="${escapeHtml(coverImage)}" alt=""></div>` : ''}
     <div class="title-area">
       <div class="title">${escapeHtml(title)}</div>
-      ${subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
+      ${!coverImage && subtitle ? `<div class="subtitle">${escapeHtml(subtitle)}</div>` : ''}
     </div>
     <div class="cover-footer">
       <span>JUST WRITE</span>
@@ -1547,7 +1554,7 @@ export async function render(
   const { fm, body } = parseFrontmatter(content);
   const resolvedAuthor = author || fm.author || '作者名';
 
-  const tokens = marked.lexer(body);
+  const tokens = marked.lexer(normalizeStrongAdjacency(body));
   const sections = splitByHeadings(tokens);
   const pages = buildPageSections(sections, fm, resolvedAuthor, baseDir);
   const title = pages.find((p) => p.type === 'cover')?.title || fm.title || '未命名';

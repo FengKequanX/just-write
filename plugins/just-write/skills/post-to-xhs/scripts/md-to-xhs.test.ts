@@ -7,6 +7,7 @@ import {
   buildEndingHtml,
   commitGeneratedOutput,
   generateCaption,
+  normalizeStrongAdjacency,
   parseXhsArgs,
   render,
   resolveCaptionTopics,
@@ -37,12 +38,31 @@ describe('XHS rendering contracts', () => {
     expect(html).toContain('cover cover--text-only');
   });
 
-  test('locks portrait cover images and fits text before allowing overflow', () => {
+  test('keeps image covers focused on the image and title', () => {
     const html = buildCoverHtml('较长的封面标题', 'cover.png', '4 / 3', '作者', '', 1, 2, '', 1440, '摘要');
     expect(html).toContain('cover cover--with-image');
+    expect(html).toContain('<div class="title">较长的封面标题</div>');
+    expect(html).not.toContain('class="subtitle"');
     expect(html).toContain("const gapKeys = ['topPadding', 'bottomPadding', 'imageGap', 'titleGap', 'subtitleGap', 'footerGap']");
     expect(html).toContain("const fontKeys = ['titleSize', 'subtitleSize']");
     expect(html).toContain("root.dataset.coverOverflow = overflows() ? 'true' : 'false'");
+  });
+
+  test('uses equal cover side padding and natural title wrapping', () => {
+    const css = fs.readFileSync(path.join(import.meta.dir, '..', 'themes', 'default', 'style.css'), 'utf8');
+    const titleRule = css.match(/\.cover \.title\s*\{([\s\S]*?)\}/)?.[1] || '';
+    expect(css).toContain('padding: var(--cover-top-padding) 72px var(--cover-bottom-padding)');
+    expect(titleRule).toContain('font-family: "Noto Serif SC"');
+    expect(titleRule).toContain('font-weight: 700');
+    expect(titleRule).toContain('text-wrap: wrap');
+    expect(titleRule).not.toContain('text-wrap: balance');
+  });
+
+  test('separates bold delimiters from immediately following Chinese invisibly', () => {
+    const source = '**关键结论。**后文紧接中文';
+    const normalized = normalizeStrongAdjacency(source);
+    expect(normalized).toBe('**关键结论。**<!-- -->后文紧接中文');
+    expect(normalized).not.toContain('**关键结论。** 后文');
   });
 
   test('uses imgs/cover-xhs.png instead of the WeChat cover', () => {
