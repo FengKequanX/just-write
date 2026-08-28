@@ -1,3 +1,5 @@
+
+
 # just-write
 
 > 那就开写吧——把你的想法变成可发布的文章。AI 辅助但不代替：思路是你的，表达也是你的。
@@ -150,7 +152,7 @@ need_open_comment: 1
 only_fans_can_comment: 0
 ```
 
-API 报 `40164: invalid ip` 时，在微信公众平台的开发配置中更新 IP 白名单。
+API 报 `40164: invalid ip` 时，在微信公众平台的开发配置中把当前 IP 加入 IP 白名单。
 
 ## 小红书素材配置
 
