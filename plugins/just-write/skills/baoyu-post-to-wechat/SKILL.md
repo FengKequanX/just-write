@@ -385,6 +385,18 @@ API发布失败：IP不在白名单内。
    4. Else fallback to first inline content image.
    5. If still missing, stop and request a cover image before publishing.
 
+### 本地阅读检查
+
+排版遵循 [手机阅读排版规则](../baoyu-format-markdown/references/reading-layout.md)。`default` 主题使用米白背景、暖色标题标记和系统无衬线正文；正文 17px / 1.8 行高，二级标题 20px、三级标题 18px，普通加粗不叠加底色，显式 `<mark>` 保留高亮。正文图片按原始比例展示，上传替换后沿用统一图片样式。
+
+需要检查新稿或改动排版时，先生成离线预览：
+
+```bash
+${BUN_X} {baseDir}/scripts/wechat-preview.ts <article.md> --out <preview.html> --theme <theme> [--color <color>] [--no-cite]
+```
+
+打开预览，切换 360/390/430px 阅读宽度，检查段落、强调、图注和长图文字；按 `warnings` 判断是否需要调整排版稿。图片副本写入预览旁的 `.assets` 目录，预览不调用公众号 API。它不能模拟微信客户端的样式过滤，正式保存草稿后仍应在微信中核对。发布时继续传入 Markdown 原稿，让发布脚本完成自己的图片上传和替换。
+
 ### Step 4: Publish to WeChat
 
 **CRITICAL**: Publishing scripts handle markdown conversion internally. Do NOT pre-convert markdown to HTML — pass the original markdown file directly. This ensures the API method renders images as `<img>` tags (for API upload) while the browser method uses placeholders (for paste-and-replace workflow).

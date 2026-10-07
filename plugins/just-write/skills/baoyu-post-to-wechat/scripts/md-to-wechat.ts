@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { inspectReadingHtml, normalizeReadingBreaks, preserveExplicitBreaks } from "../../../lib/reading-format.ts";
 
 import {
   extractSummaryFromBody,
@@ -32,6 +33,7 @@ interface ParsedResult {
   summary: string;
   htmlPath: string;
   contentImages: ImageInfo[];
+  readingWarnings: string[];
 }
 
 export async function convertMarkdown(
@@ -58,7 +60,7 @@ export async function convertMarkdown(
     summary = extractSummaryFromBody(body, 120);
   }
 
-  const normalizedBody = normalizeReferenceMarkdown(body);
+  const normalizedBody = preserveExplicitBreaks(normalizeReferenceMarkdown(body));
   const { images, markdown: rewrittenBody } = replaceMarkdownImagesWithPlaceholders(
     normalizedBody,
     "WECHATIMGPH_",
@@ -77,13 +79,15 @@ export async function convertMarkdown(
   const rendered = await renderMarkdownDocument(rewrittenMarkdown, {
     citeStatus,
     defaultTitle: title,
-    keepTitle: false,
+    // 上游 keepTitle:false 会删掉任意首个标题；仅正文以一级文章标题开头时去重。
+    keepTitle: !/^\s*#(?!#)\s/.test(body),
     primaryColor: theme === "default" ? configuredColor ?? XHS_DEFAULT_ACCENT : configuredColor,
     theme: options?.theme,
   });
+  const normalizedHtml = normalizeReadingBreaks(rendered.html);
   const html = theme === "default"
-    ? applyWechatEditorialTypography(rendered.html, rendered.style.primaryColor)
-    : rendered.html;
+    ? applyWechatEditorialTypography(normalizedHtml, rendered.style.primaryColor)
+    : normalizedHtml;
   fs.writeFileSync(htmlPath, html, "utf-8");
 
   const contentImages = await resolveContentImages(images, baseDir, tempDir, "md-to-wechat");
@@ -94,6 +98,7 @@ export async function convertMarkdown(
     summary,
     htmlPath,
     contentImages,
+    readingWarnings: inspectReadingHtml(html),
   };
 }
 
@@ -175,7 +180,9 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(result, null, 2));
 }
 
-await main().catch((error) => {
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  await main().catch((error) => {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

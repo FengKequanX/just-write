@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   buildCoverHtml,
   buildEndingHtml,
+  CarouselLimitError,
   commitGeneratedOutput,
   generateCaption,
   normalizeStrongAdjacency,
@@ -13,6 +14,7 @@ import {
   resolveCaptionTopics,
   resolveCoverImage,
   type RenderResult,
+  type CarouselReport,
 } from './md-to-xhs';
 
 const roots: string[] = [];
@@ -103,6 +105,7 @@ describe('XHS rendering contracts', () => {
     fs.writeFileSync(path.join(output, '01-cover.png'), 'old');
     fs.writeFileSync(path.join(output, '99-content-stale.png'), 'old');
     fs.writeFileSync(path.join(output, 'notes.txt'), 'keep');
+    fs.writeFileSync(path.join(output, 'preview.html'), 'stale preview');
     const cover = path.join(staging, '01-cover.png');
     const ending = path.join(staging, '02-ending.png');
     const caption = path.join(staging, 'caption.md');
@@ -115,6 +118,7 @@ describe('XHS rendering contracts', () => {
     expect(fs.existsSync(path.join(output, '99-content-stale.png'))).toBe(false);
     expect(fs.readFileSync(path.join(output, '01-cover.png'), 'utf8')).toBe('new');
     expect(fs.existsSync(path.join(output, 'notes.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(output, 'preview.html'))).toBe(false);
     expect(committed.images.map((file) => path.basename(file))).toEqual(['01-cover.png', '02-ending.png']);
   });
 
@@ -196,7 +200,8 @@ ${rows}
     expect(result.totalPages).toBeGreaterThan(4);
     expect(result.images.every((image) => fs.existsSync(image))).toBe(true);
     expect(path.basename(result.images[0]!)).toBe('01-cover.png');
-    expect(path.basename(result.images.at(-1)!)).toMatch(/-ending\.png$/);
+    expect(result.totalPages).toBeLessThanOrEqual(18);
+    expect(path.basename(result.images.at(-1)!)).toMatch(/-content-/);
   }, 60_000);
 
   test('renders the same short article in every supported aspect', async () => {
@@ -205,13 +210,13 @@ ${rows}
 
 ## 正文
 
-短文章也应在所有受支持的画布比例中稳定生成，且保持封面、正文和结束页结构。
+短文章应在所有受支持的画布比例中稳定生成，正文读完即结束。
 `);
 
     for (const aspect of ['3:4', '9:16', '1:1', '4:3']) {
       const output = path.join(root, aspect.replace(':', '-'));
       const result = await render(article, output, 'default', aspect, '测试作者', '');
-      expect(result.totalPages).toBe(3);
+      expect(result.totalPages).toBe(2);
     }
   }, 60_000);
 
@@ -228,4 +233,74 @@ ${rows}
     );
     expect(fs.readdirSync(output)).toEqual([]);
   }, 30_000);
+
+  test('超过 18 张时不生成 PNG，并保留已有轮播和无关文件', async () => {
+    const root = tempRoot();
+    const article = writeArticle(root, Array.from({ length: 20 }, (_, i) => `<div style="height:1200px">完整内容 ${i + 1}</div>`).join('\n\n'));
+    const output = path.join(root, 'xhs');
+    fs.mkdirSync(output);
+    fs.writeFileSync(path.join(output, '01-cover.png'), '已有封面');
+    fs.writeFileSync(path.join(output, 'notes.txt'), '无关文件');
+    try {
+      await render(article, output, 'default', '3:4', '作者', '');
+      throw new Error('超限应拒绝生成');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CarouselLimitError);
+      expect((error as CarouselLimitError).neededImages).toBeGreaterThan(18);
+    }
+    expect(fs.readdirSync(output).sort()).toEqual(['01-cover.png', 'notes.txt']);
+    expect(fs.readFileSync(path.join(output, '01-cover.png'), 'utf8')).toBe('已有封面');
+  }, 30_000);
+
+  test('短列表项放不下时整体换页，不能把一两个字单独留在续页', async () => {
+    const root = tempRoot();
+    const article = writeArticle(root, `<div style="height:1230px">前页内容</div>\n\n- ${'短列表项应完整阅读，'.repeat(4)}\n\n后续正文自然跟随。`);
+    const result = await render(article, path.join(root, 'xhs'), 'default', '3:4', '作者', '');
+    const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
+    const bodyPages = report.pages.filter(page => page.type === 'content');
+    expect(bodyPages).toHaveLength(2);
+    expect(bodyPages[0]!.metrics!.blockKinds).toEqual(['other']);
+    expect(bodyPages[1]!.metrics!.blockKinds).toEqual(['list-item', 'paragraph']);
+  }, 30_000);
+
+  test('图片从正文剩余空间自然翻页，竖图和长图保持整宽及连续覆盖', async () => {
+    const root = tempRoot();
+    const image = (height: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="${height}"><rect width="600" height="${height}" fill="white"/>${Array.from({ length: Math.floor(height / 80) }, (_, index) => `<text x="24" y="${index * 80 + 40}" font-size="28">截图内容 ${index + 1} · 保留整行文字</text>`).join('')}</svg>`;
+    fs.writeFileSync(path.join(root, 'portrait.svg'), image(900));
+    fs.writeFileSync(path.join(root, 'long.svg'), image(3000));
+    // PNG 封面覆盖无头浏览器 decode() 等待不返回的回归场景。
+    fs.mkdirSync(path.join(root, 'imgs'));
+    fs.writeFileSync(path.join(root, 'imgs', 'cover-xhs.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'));
+    const article = writeArticle(root, `## 竖图\n\n这段短文字必须与后面的图片连续排版，不能单独一页。\n\n![竖图](portrait.svg)\n\n## 长图\n\n![长图](long.svg)\n\n*原图说明保持在最后一段图片旁边。*\n\n## 后文\n\n图片之后的正文仍然完整。`);
+    const result = await render(article, path.join(root, 'xhs'), 'default', '3:4', '作者', '排版,图片');
+    const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
+    const images = report.pages.flatMap((page) => page.metrics?.images || []);
+    expect(report.textPreserved).toBe(true);
+    expect(report.imageOrderPreserved).toBe(true);
+    expect(report.pages.every((page) => page.layoutChecked)).toBe(true);
+    expect(images[0]!.mode).toBe('split');
+    expect(images[0]!.displayWidth).toBeCloseTo(report.contentWidth, 1);
+    const bodyPages = report.pages.filter(page => page.type === 'content');
+    expect(bodyPages[0]!.metrics!.blockKinds).toContain('paragraph');
+    expect(bodyPages[0]!.metrics!.images[0]!.sourceIndex).toBe(1);
+    expect(bodyPages.slice(0, -1).every(page => page.metrics!.occupancy > 0.75)).toBe(true);
+    expect(report.maxImages).toBe(18);
+    expect(result.totalPages).toBeLessThanOrEqual(18);
+    const slices = images.filter((img) => img.sourceIndex === 2);
+    expect(slices.length).toBeGreaterThan(1);
+    expect(slices[0]!.sliceStart).toBe(0);
+    expect(slices.at(-1)!.sliceEnd).toBeCloseTo(3000, 2);
+    for (let index = 0; index < slices.length; index++) {
+      expect(slices[index]!.displayWidth).toBeCloseTo(report.contentWidth, 1);
+      if (index) {
+        expect(slices[index]!.sliceStart).toBeLessThanOrEqual(slices[index - 1]!.sliceEnd);
+        expect(slices[index]!.sliceEnd).toBeGreaterThan(slices[index - 1]!.sliceEnd);
+      }
+    }
+    expect(report.pages.every((page) => !page.metrics || page.metrics.height <= report.availableHeight + 0.5)).toBe(true);
+    const preview = fs.readFileSync(result.previewPath!, 'utf8');
+    expect(preview).toContain(path.basename(result.images[0]!));
+    expect(preview).not.toContain(root);
+    expect(preview).toContain('手机 360px');
+  }, 60_000);
 });

@@ -75,7 +75,9 @@ Read the user-specified file, then detect content type:
 | Has `**bold**`, `*italic*`, lists, code blocks, blockquotes | Markdown |
 | None of above | Plain text |
 
-**If Markdown detected, use `AskUserQuestion` to ask:**
+用户已明确要求优化排版时，直接执行 Optimize；用户要求保留格式时按原格式处理。仅在排版范围不明时询问下面的选项。
+
+**If Markdown detected and the scope is unresolved, use `AskUserQuestion` to ask:**
 
 ```
 Detected existing markdown formatting. What would you like to do?
@@ -167,7 +169,7 @@ Check for YAML frontmatter (`---` block). Create if missing.
 
 #### Title Generation
 
-Whether or not a title already exists, run the title optimization flow unless `auto_select_title` is set.
+用户要求标题不变或上游已锁定标题时，原样保留并跳过标题候选。其他情况按下面流程生成候选，遵循 `auto_select_title` 配置。
 
 **Preparation** — read the full text and extract:
 - Core argument (one sentence: "what is this article about?")
@@ -229,6 +231,8 @@ Once the title is in frontmatter, the body should NOT contain an H1 (avoid dupli
 ### Step 4: Format Content
 
 Apply formatting guided by the Step 2 analysis. The goal is making the content scannable and the key points impossible to miss.
+
+先读取 [手机阅读排版规则](references/reading-layout.md)，据此处理段落、加粗、高亮和明确换行。不要为了“优化”增加装饰数量；渲染器会分别提供公众号与轮播的显示样式。
 
 **Formatting toolkit:**
 

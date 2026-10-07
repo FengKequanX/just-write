@@ -6,6 +6,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
 import { marked, type Token } from 'marked';
 import { loadXhsConfig, validateXhsOptions, type XhsConfig } from './xhs-config';
+import { inspectReadingHtml, normalizeReadingBreaks, preserveExplicitBreaks } from '../../../lib/reading-format';
+import { IMAGE_LAYOUT_SCRIPT } from './image-layout';
 
 // --- Types ---
 
@@ -50,8 +52,9 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 
 const DEFAULT_ASPECT = '3:4';
 const MAX_TOPIC_TAGS = 5;
-const CONTENT_TOP_PAD = 70;
-const CONTENT_BOTTOM_PAD = 88;
+export const MAX_CAROUSEL_IMAGES = 18;
+const CONTENT_TOP_PAD = 56;
+const CONTENT_BOTTOM_PAD = 56;
 const PAGE_NUM_HEIGHT = 0;
 const CONTENT_SIDE_PAD = 70;
 const imageSizeCache = new Map<string, { width: number; height: number } | null>();
@@ -119,6 +122,7 @@ function renderWithChrome(
       '--disable-gpu',
       '--no-sandbox',
       '--hide-scrollbars',
+      '--allow-file-access-from-files',
       '--run-all-compositor-stages-before-draw',
       '--virtual-time-budget=8000',
       `--window-size=${width},${height}`,
@@ -177,6 +181,7 @@ function dumpDomWithChrome(
       '--disable-gpu',
       '--no-sandbox',
       '--hide-scrollbars',
+      '--allow-file-access-from-files',
       '--run-all-compositor-stages-before-draw',
       '--virtual-time-budget=8000',
       `--window-size=${width},${height}`,
@@ -615,7 +620,7 @@ function buildPageSections(
     contentTokens.push(...section.tokens);
   }
 
-  const contentHtml = normalizeReadingHtml(contentHtmlParts.join('\n'));
+  const contentHtml = normalizeReadingHtml(normalizeReadingBreaks(contentHtmlParts.join('\n')));
   if (contentHtml.trim()) {
     pages.push({
       type: 'content',
@@ -626,17 +631,6 @@ function buildPageSections(
       slug: 'content',
     });
   }
-
-  pages.push({
-    type: 'ending',
-    title: '',
-    bodyHtml: '',
-    rawTokens: [],
-    layout: 'prose',
-    slug: 'ending',
-    tags: [],
-    author: author || fm.author || '作者名',
-  });
 
   return pages;
 }
@@ -691,11 +685,12 @@ export function buildCoverHtml(
       <span>共 ${String(totalPages).padStart(2, '0')} 页 · 右滑阅读</span>
     </div>
   </div>
-  ${coverImage ? `<script>
-    (() => {
+  <script>
+    (async () => {
+      await document.fonts.ready;
       const root = document.body;
       const content = root.querySelector('.cover-content');
-      if (!content || root.clientHeight <= root.clientWidth) return;
+      if (!content) return;
 
       const values = {
         topPadding: 56,
@@ -704,7 +699,7 @@ export function buildCoverHtml(
         titleGap: 44,
         subtitleGap: 22,
         footerGap: 22,
-        titleSize: 64,
+        titleSize: parseFloat(getComputedStyle(root).getPropertyValue('--cover-title-size')) || 64,
         subtitleSize: 29,
       };
       const minimums = {
@@ -747,7 +742,7 @@ export function buildCoverHtml(
       root.dataset.coverFit = adjusted ? 'compact' : 'default';
       root.dataset.coverOverflow = overflows() ? 'true' : 'false';
     })();
-  </script>` : ''}
+  </script>
 </body></html>`;
 }
 
@@ -762,7 +757,9 @@ function buildContentHtml(
   dims: string,
   articleKicker = '',
 ): string {
-  const layoutClass = `content--${layout}`;
+  const layoutClass = bodyHtml.includes('data-xhs-image-page')
+    ? 'content--image-page'
+    : `content--${layout}`;
   const kicker = articleKicker.length > 22 ? `${articleKicker.slice(0, 21)}…` : articleKicker;
   const kickerHtml = kicker ? `<div class="page-kicker">${escapeHtml(kicker)}</div>` : '';
   const titleHtml = sectionTitle
@@ -879,17 +876,18 @@ async function measureContentPagesWithChrome(
   viewportHeight: number,
   viewportWidth: number,
   baseDir: string,
-): Promise<string[]> {
+): Promise<{ pages: string[]; metrics: ContentPageMetrics[] }> {
   const sourceHtml = resolveImagePaths(addImageDimensions(bodyHtml, baseDir), baseDir);
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><style>${css}</style></head>
 <body class="content content--prose" style="${dims}">
-  <div id="measure" class="body" style="width:${viewportWidth}px;"></div>
+  <div id="measure" class="body" style="width:${viewportWidth}px;flex:none;height:auto;display:flow-root;"></div>
   <script id="xhs-source" type="application/json">${jsonForScript(sourceHtml)}</script>
   <script>
     (async () => {
       const limit = ${viewportHeight};
+      const imageViewportWidth = ${viewportWidth};
       const measureEl = document.getElementById('measure');
       const sourceHtml = JSON.parse(document.getElementById('xhs-source').textContent || '""');
       const finish = (value) => {
@@ -904,6 +902,7 @@ async function measureContentPagesWithChrome(
         await document.fonts.ready;
 
         const source = document.createElement('div');
+        const loadedImages = new Map();
         source.innerHTML = sourceHtml;
         const imageSources = Array.from(source.querySelectorAll('img'))
           .map((img) => img.currentSrc || img.src)
@@ -911,11 +910,12 @@ async function measureContentPagesWithChrome(
         await Promise.all(imageSources.map((src) => new Promise((resolve, reject) => {
           const img = new Image();
           const timeout = setTimeout(() => reject(new Error('image load timed out: ' + src)), 6000);
-          img.onload = () => { clearTimeout(timeout); resolve(undefined); };
+          img.onload = () => { clearTimeout(timeout); loadedImages.set(src, img); resolve(undefined); };
           img.onerror = () => { clearTimeout(timeout); reject(new Error('image failed to load: ' + src)); };
           img.src = src;
           if (img.complete && img.naturalWidth > 0) {
             clearTimeout(timeout);
+            loadedImages.set(src, img);
             resolve(undefined);
           }
         })));
@@ -932,7 +932,7 @@ async function measureContentPagesWithChrome(
           if (tag === 'blockquote') return 'blockquote';
           if (tag === 'pre') return 'code';
           if (tag === 'table') return 'table';
-          if (element.querySelector('img')) return 'image';
+          if (tag === 'img' || element.querySelector('img')) return 'image';
           return 'other';
         };
         const blockFromNode = (node, forcedKind) => {
@@ -941,7 +941,7 @@ async function measureContentPagesWithChrome(
           return {
             html,
             kind: forcedKind || (element ? kindOfElement(element) : 'paragraph'),
-            hasImage: !!(element && element.querySelector('img')),
+            hasImage: !!(element && (element.matches('img') || element.querySelector('img'))),
           };
         };
         const extractBlocks = (html) => {
@@ -1018,6 +1018,7 @@ async function measureContentPagesWithChrome(
           container.innerHTML = html;
           if (stripRepeatedHeaders) {
             container.querySelectorAll('[data-xhs-repeated-header="true"]').forEach((node) => node.remove());
+            container.querySelectorAll('[data-xhs-decoration="true"]').forEach((node) => node.remove());
           }
           return (container.textContent || '').replace(/\\s+/g, ' ').trim();
         };
@@ -1033,11 +1034,17 @@ async function measureContentPagesWithChrome(
         const lineCount = (html) => {
           measureEl.innerHTML = html;
           const range = document.createRange();
-          range.selectNodeContents(measureEl);
           const tops = [];
-          for (const rect of Array.from(range.getClientRects())) {
-            if (rect.width <= 0 || rect.height <= 0) continue;
-            if (!tops.some((top) => Math.abs(top - rect.top) < 1)) tops.push(rect.top);
+          const tolerance = parseFloat(getComputedStyle(measureEl).lineHeight) * 0.3;
+          const walker = document.createTreeWalker(measureEl, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            if (!(walker.currentNode.nodeValue || '').trim()) continue;
+            // 只统计文字行，不能把段落、列表容器的外框误算成另一行。
+            range.selectNodeContents(walker.currentNode);
+            for (const rect of Array.from(range.getClientRects())) {
+              if (rect.width <= 0 || rect.height <= 0) continue;
+              if (!tops.some((top) => Math.abs(top - rect.top) < tolerance)) tops.push(rect.top);
+            }
           }
           return tops.length;
         };
@@ -1097,6 +1104,7 @@ async function measureContentPagesWithChrome(
         const splitTextToFit = (current, block, enforceWidows = true) => {
           const total = visibleLength(block.html);
           const totalLines = lineCount(block.html);
+          if (enforceWidows && totalLines < 4) return null;
           let low = 1;
           let high = total - 1;
           let best = null;
@@ -1110,17 +1118,17 @@ async function measureContentPagesWithChrome(
             }
             const candidateLength = visibleLength(candidate.head);
             const fits = heightOf(current + candidate.head) <= limit;
-            const respectsWidows = !enforceWidows || totalLines < 4 ||
-              (lineCount(candidate.head) >= 2 && lineCount(candidate.tail) >= 2);
-            if (fits && respectsWidows) {
+            const headLines = enforceWidows ? lineCount(candidate.head) : 2;
+            const tailLines = enforceWidows ? lineCount(candidate.tail) : 2;
+            if (fits && headLines >= 2 && tailLines >= 2) {
               if (candidateLength > bestLength) {
                 best = candidate;
                 bestLength = candidateLength;
               }
               low = mid + 1;
-            } else {
+            } else if (!fits || tailLines < 2) {
               high = mid - 1;
-            }
+            } else low = mid + 1;
           }
           return best;
         };
@@ -1171,19 +1179,24 @@ async function measureContentPagesWithChrome(
           }
           return best;
         };
-        const fitImageBlock = (block, prefix = '', minImagePx = 32) => {
+        const fitImageBlock = (block, prefix = '') => {
           const container = document.createElement('div');
           container.innerHTML = block.html;
           const images = Array.from(container.querySelectorAll('img'));
           if (images.length === 0) return null;
-          let low = minImagePx;
-          let high = Math.min(480, limit);
+          let low = Math.ceil(Math.max(...images.map((img) => {
+            const size = loadedImages.get(img.src);
+            return size ? imageViewportWidth * 0.75 * size.naturalHeight / size.naturalWidth : limit;
+          })));
+          let high = Math.floor(limit);
           let best = null;
           while (low <= high) {
             const mid = Math.floor((low + high) / 2);
             images.forEach((img) => {
               img.style.maxHeight = mid + 'px';
               img.style.height = 'auto';
+              const size = loadedImages.get(img.src);
+              if (size) img.style.width = Math.min(imageViewportWidth, mid * size.naturalWidth / size.naturalHeight) + 'px';
             });
             const candidate = container.innerHTML;
             if (heightOf(prefix + candidate) <= limit) {
@@ -1219,8 +1232,10 @@ async function measureContentPagesWithChrome(
           }
           return merged;
         };
+        ${IMAGE_LAYOUT_SCRIPT}
         const prefixWithLines = (block, minimumLines) => {
-          if (block.hasImage || visibleLength(block.html) === 0) return block.html;
+          if (block.hasImage) return minimumImagePrefix(block);
+          if (visibleLength(block.html) === 0) return block.html;
           const total = visibleLength(block.html);
           let low = 1;
           let high = total - 1;
@@ -1238,13 +1253,7 @@ async function measureContentPagesWithChrome(
           }
           return best;
         };
-        const pageIsValid = (html) => {
-          if (!html.trim() || heightOf(html) > limit + 0.5) return false;
-          const pageBlocks = extractBlocks(html);
-          return pageBlocks.length > 0 && pageBlocks[pageBlocks.length - 1].kind !== 'heading';
-        };
-
-        const blocks = mergeImageCaptions(extractBlocks(sourceHtml));
+        const blocks = mergeImageCaptions(extractBlocks(source.innerHTML));
         const pages = [];
         let current = '';
 
@@ -1253,6 +1262,14 @@ async function measureContentPagesWithChrome(
           if (block.kind === 'heading') {
             const next = blocks[i + 1];
             if (!next) throw new Error('heading has no following content');
+            const imagePages = planImagePages(next, block.html);
+            if (imagePages) {
+              if (current.trim()) pages.push(current);
+              current = '';
+              pages.push(...imagePages);
+              i++;
+              continue;
+            }
             const required = block.html + prefixWithLines(next, 2);
             if (heightOf(required) > limit) throw new Error('heading and two following lines exceed one page');
             if (current.trim() && heightOf(current + required) > limit) {
@@ -1261,13 +1278,22 @@ async function measureContentPagesWithChrome(
             }
           }
 
+          const imagePages = planImagePages(block);
+          if (imagePages) {
+            if (current.trim()) pages.push(current);
+            current = '';
+            pages.push(...imagePages);
+            continue;
+          }
+
           if (heightOf(current + block.html) <= limit) {
             current += block.html;
             continue;
           }
 
           if (current.trim()) {
-            const split = !block.hasImage && ['paragraph', 'list-item', 'blockquote', 'code', 'table'].includes(block.kind)
+            const split = block.hasImage ? splitImageToFit(current, block)
+              : ['paragraph', 'list-item', 'blockquote', 'code', 'table'].includes(block.kind)
               ? block.kind === 'code'
                 ? splitCodeToFit(current, block)
                 : block.kind === 'table'
@@ -1275,18 +1301,13 @@ async function measureContentPagesWithChrome(
                   : splitTextToFit(current, block, true)
               : null;
             if (split) {
-              pages.push(current + split.head);
-              current = '';
-              blocks[i] = blockFromHtml(split.tail, block.kind);
-              i--;
+              if (split.tail) {
+                pages.push(current + split.head);
+                current = '';
+                blocks[i] = blockFromHtml(split.tail, block.kind);
+                i--;
+              } else current += split.head;
               continue;
-            }
-            if (block.hasImage) {
-              const squeezed = fitImageBlock(block, current, 260);
-              if (squeezed) {
-                current += squeezed;
-                continue;
-              }
             }
             pages.push(current);
             current = '';
@@ -1295,6 +1316,15 @@ async function measureContentPagesWithChrome(
           }
 
           if (block.hasImage) {
+            const split = splitImageToFit('', block);
+            if (split) {
+              if (split.tail) {
+                pages.push(split.head);
+                blocks[i] = blockFromHtml(split.tail, block.kind);
+                i--;
+              } else current = split.head;
+              continue;
+            }
             const fitted = fitImageBlock(block);
             if (fitted) {
               current = fitted;
@@ -1323,29 +1353,6 @@ async function measureContentPagesWithChrome(
         if (current.trim()) pages.push(current);
         if (pages.length === 0) pages.push('');
 
-        if (pages.length >= 2) {
-          const lastIndex = pages.length - 1;
-          const originalLastHeight = heightOf(pages[lastIndex]);
-          if (originalLastHeight / limit < 0.45) {
-            const combined = extractBlocks(pages[lastIndex - 1] + pages[lastIndex]);
-            let best = null;
-            for (let splitAt = 1; splitAt < combined.length; splitAt++) {
-              const left = combined.slice(0, splitAt).map((item) => item.html).join('');
-              const right = combined.slice(splitAt).map((item) => item.html).join('');
-              if (!pageIsValid(left) || !pageIsValid(right)) continue;
-              const leftHeight = heightOf(left);
-              const rightHeight = heightOf(right);
-              if (leftHeight / limit < 0.45 || rightHeight <= originalLastHeight) continue;
-              const score = Math.abs(leftHeight - rightHeight);
-              if (!best || score < best.score) best = { left, right, score };
-            }
-            if (best) {
-              pages[lastIndex - 1] = best.left;
-              pages[lastIndex] = best.right;
-            }
-          }
-        }
-
         const metrics = pages.map((page, index) => {
           const height = heightOf(page);
           const pageBlocks = extractBlocks(page);
@@ -1355,7 +1362,23 @@ async function measureContentPagesWithChrome(
           if (pageBlocks.length > 0 && pageBlocks[pageBlocks.length - 1].kind === 'heading') {
             throw new Error('page ' + (index + 1) + ' ends with an orphan heading');
           }
-          return { height, blockKinds: pageBlocks.map((item) => item.kind) };
+          const images = Array.from(measureEl.querySelectorAll('img')).map((img) => {
+            const rect = img.getBoundingClientRect();
+            const frame = img.closest('.xhs-image-frame');
+            const dimensions = imageDimensions.get(Number(img.dataset.xhsSourceIndex));
+            return {
+              sourceIndex: Number(img.dataset.xhsSourceIndex),
+              source: img.src,
+              sourceWidth: dimensions.width,
+              sourceHeight: dimensions.height,
+              displayWidth: rect.width,
+              displayHeight: frame ? frame.getBoundingClientRect().height : rect.height,
+              mode: img.dataset.xhsImageMode || 'inline',
+              sliceStart: Number(img.dataset.xhsSliceStart || 0),
+              sliceEnd: Number(img.dataset.xhsSliceEnd || dimensions.height),
+            };
+          });
+          return { height, occupancy: height / limit, blockKinds: pageBlocks.map((item) => item.kind), images };
         });
         const comparableText = (html, stripRepeatedHeaders = false) =>
           visibleText(html, stripRepeatedHeaders).replace(/\\s+/g, '');
@@ -1366,6 +1389,25 @@ async function measureContentPagesWithChrome(
           while (mismatch < sourceText.length && sourceText[mismatch] === pagedText[mismatch]) mismatch++;
           throw new Error('paginated text differs from source content at character ' + mismatch +
             ' (source ' + sourceText.length + ', pages ' + pagedText.length + ')');
+        }
+        const expectedImageOrder = Array.from(source.querySelectorAll('img')).map((img) => Number(img.dataset.xhsSourceIndex));
+        const actualImageOrder = metrics.flatMap((page) => page.images.map((img) => img.sourceIndex))
+          .filter((index, position, list) => position === 0 || index !== list[position - 1]);
+        if (JSON.stringify(expectedImageOrder) !== JSON.stringify(actualImageOrder)) {
+          throw new Error('分页后的图片顺序或数量与原文不同');
+        }
+        for (const sourceIndex of expectedImageOrder) {
+          const slices = metrics.flatMap((page) => page.images).filter((image) => image.sourceIndex === sourceIndex);
+          let coveredUntil = 0;
+          for (const slice of slices) {
+            if (slice.sliceStart > coveredUntil + 0.5 || slice.sliceEnd <= slice.sliceStart) {
+              throw new Error('图片 ' + sourceIndex + ' 分段不连续');
+            }
+            coveredUntil = Math.max(coveredUntil, slice.sliceEnd);
+          }
+          if (Math.abs(coveredUntil - imageDimensions.get(sourceIndex).height) > 0.5) {
+            throw new Error('图片 ' + sourceIndex + ' 未完整覆盖原图');
+          }
         }
         finish({ pages, metrics });
       } catch (error) {
@@ -1393,7 +1435,7 @@ async function measureContentPagesWithChrome(
       ? result.pages.filter((p: unknown) => typeof p === 'string' && p.trim())
       : [];
     if (pages.length === 0) throw new Error('[md-to-xhs] Pagination failed: Chrome returned no content pages');
-    return pages;
+    return { pages, metrics: result.metrics };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('[md-to-xhs] Pagination failed:')) throw error;
     throw new Error(`[md-to-xhs] Pagination failed: invalid Chrome result (${error instanceof Error ? error.message : String(error)})`);
@@ -1531,12 +1573,99 @@ function extractContentTags(body: string): string[] {
 
 // --- Main Render ---
 
+export interface ImagePageMetrics {
+  sourceIndex: number;
+  source: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  displayWidth: number;
+  displayHeight: number;
+  mode: 'inline' | 'page' | 'split';
+  sliceStart: number;
+  sliceEnd: number;
+}
+
+export interface ContentPageMetrics {
+  height: number;
+  occupancy: number;
+  blockKinds: string[];
+  images: ImagePageMetrics[];
+}
+
+export interface CarouselReport {
+  title: string;
+  aspect: string;
+  width: number;
+  height: number;
+  contentWidth: number;
+  availableHeight: number;
+  maxImages: number;
+  typography: 'standard' | 'compact';
+  textPreserved: boolean;
+  imageOrderPreserved: boolean;
+  warnings: string[];
+  pages: Array<{ file: string; type: PageSection['type']; metrics?: ContentPageMetrics; layoutChecked: boolean }>;
+}
+
+export class CarouselLimitError extends Error {
+  constructor(public readonly neededImages: number, public readonly pageMetrics: ContentPageMetrics[]) {
+    super(`完整内容需要 ${neededImages} 张，超过 ${MAX_CAROUSEL_IMAGES} 张上限。请拆分为多篇或精简内容；未生成超限轮播，也未删除原文。`);
+    this.name = 'CarouselLimitError';
+  }
+}
+
+async function validatePageWithChrome(html: string, size: AspectSize): Promise<void> {
+  const instrumented = html.replace('</body>', `<script>
+  (async()=>{
+    try {
+      await document.fonts.ready;
+      // 无头 DOM 导出中 PNG 的 decode() 可能一直等待；布局只需加载后的自然尺寸。
+      await Promise.all(Array.from(document.images).map(img=>new Promise((resolve,reject)=>{
+        const done=()=>img.naturalWidth>0?resolve():reject(new Error('图片加载失败：'+img.src));
+        if(img.complete)done();else{img.addEventListener('load',done,{once:true});img.addEventListener('error',()=>reject(new Error('图片加载失败：'+img.src)),{once:true});}
+      })));
+      const root=document.body;
+      const outside=[];
+      root.querySelectorAll('.body,p,h2,h3,blockquote,table,pre,.xhs-image-frame,.cover-content,.cover-image,.cover-image-fg,.cover-footer,.ending-content,.ending-meta,.ending-footer,.title,.subtitle').forEach(el=>{
+        const rect=el.getBoundingClientRect();
+        if(rect.width===0||rect.height===0)return;
+        // 封面图有意延伸到画布边缘；容器和图片仍逐一检查画布边界。
+        const checkInnerWidth=!el.matches('.cover-content,.cover-image');
+        if(rect.left < -1 || rect.right > root.clientWidth+1 || rect.top < -1 || rect.bottom > root.clientHeight+1 || (checkInnerWidth && el.scrollWidth > el.clientWidth+2)) outside.push(el.className||el.tagName);
+      });
+      if(root.dataset.coverOverflow==='true')outside.push('封面文字');
+      const pre=document.createElement('pre');pre.id='xhs-layout-result';pre.textContent=btoa(unescape(encodeURIComponent(JSON.stringify({outside}))));root.append(pre);
+    }catch(error){const pre=document.createElement('pre');pre.id='xhs-layout-result';pre.textContent=btoa(unescape(encodeURIComponent(JSON.stringify({error:String(error)}))));document.body.append(pre);}
+  })();
+  </script></body>`);
+  let match: RegExpMatchArray | null = null;
+  for (let attempt = 0; attempt < 2 && !match; attempt++) {
+    const dom = await dumpDomWithChrome(instrumented, size.width, size.height);
+    match = dom.match(/<pre id="xhs-layout-result">([^<]+)<\/pre>/);
+  }
+  if (!match) throw new Error('渲染后布局检查没有返回结果');
+  const result = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+  if (result.error || result.outside?.length) throw new Error(`渲染后发现溢出或图片加载失败：${result.error || result.outside.join('、')}`);
+}
+
 export interface RenderResult {
   images: string[];
   captionPath: string;
   title: string;
   topics: string[];
   totalPages: number;
+  previewPath?: string;
+  reportPath?: string;
+}
+
+function buildPreviewHtml(report: CarouselReport): string {
+  const pages = report.pages.map((page, index) => `<figure><a href="${escapeHtml(page.file)}" target="_blank"><img src="${escapeHtml(page.file)}" alt="第 ${index + 1} 页" loading="lazy"></a><figcaption>${index + 1} / ${report.pages.length}</figcaption></figure>`).join('\n');
+  const warnings = report.warnings.length ? `<details><summary>需要检查的阅读问题（${report.warnings.length}）</summary><ul>${report.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul></details>` : '';
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(report.title)} · 轮播预览</title><style>
+  *{box-sizing:border-box}body{margin:0;padding:24px;background:#f2efe9;color:#17171b;font:16px/1.6 system-ui,sans-serif}h1{font-size:22px;margin:0 0 12px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}button{font:inherit;padding:6px 12px;border:1px solid #bdb7af;border-radius:6px;background:#fff;color:#17171b;cursor:pointer}button[aria-pressed=true]{background:#17171b;color:#fff}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));gap:24px}figure{margin:0}img{display:block;width:100%;height:auto}figcaption{margin-top:6px;text-align:center;color:#4b5563}main.phone{display:flex;flex-direction:column;align-items:center}main.phone figure{width:min(var(--phone-width),100%)}details{margin:12px 0}a:focus-visible,button:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+  </style></head><body><h1>${escapeHtml(report.title)}</h1><nav aria-label="预览尺寸"><button data-width="0" aria-pressed="true">整组总览</button><button data-width="360" aria-pressed="false">手机 360px</button><button data-width="390" aria-pressed="false">手机 390px</button><button data-width="430" aria-pressed="false">手机 430px</button></nav>${warnings}<main>${pages}</main><script>
+  const main=document.querySelector('main');document.querySelectorAll('button[data-width]').forEach(button=>button.addEventListener('click',()=>{const width=Number(button.dataset.width);main.classList.toggle('phone',width>0);main.style.setProperty('--phone-width',width+'px');document.querySelectorAll('button[data-width]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));}));
+  </script></body></html>`;
 }
 
 export async function render(
@@ -1554,14 +1683,16 @@ export async function render(
   const { fm, body } = parseFrontmatter(content);
   const resolvedAuthor = author || fm.author || '作者名';
 
-  const tokens = marked.lexer(normalizeStrongAdjacency(body));
+  const tokens = marked.lexer(preserveExplicitBreaks(normalizeStrongAdjacency(body)), { breaks: false });
   const sections = splitByHeadings(tokens);
   const pages = buildPageSections(sections, fm, resolvedAuthor, baseDir);
   const title = pages.find((p) => p.type === 'cover')?.title || fm.title || '未命名';
   const topics = resolveCaptionTopics(title, body, fm, topicTags);
   const endingPage = pages.find((page) => page.type === 'ending');
   if (endingPage) endingPage.tags = topics;
-  const css = loadCss(theme);
+  const baseCss = loadCss(theme);
+  let css = baseCss;
+  let typography: CarouselReport['typography'] = 'standard';
   const contentWidth = size.width - CONTENT_SIDE_PAD * 2;
   const availableHeight = size.height - CONTENT_TOP_PAD - CONTENT_BOTTOM_PAD - PAGE_NUM_HEIGHT;
   const dimensionCss = `body{height:${size.height}px;width:${size.width}px;min-height:${size.height}px;}`;
@@ -1575,36 +1706,44 @@ export async function render(
     chunkIndex: number;
     totalChunks: number;
     bodyHtml: string;
+    metrics?: ContentPageMetrics;
   }
   const planned: PlannedPage[] = [];
 
-  for (const section of pages) {
-    if (section.type === 'cover' || section.type === 'ending') {
-      planned.push({ section, chunkIndex: 0, totalChunks: 1, bodyHtml: section.bodyHtml });
-    } else {
-      const chunks = await measureContentPagesWithChrome(
-        section.bodyHtml,
-        css + dimensionCss,
-        dims,
-        size,
-        availableHeight,
-        contentWidth,
-        baseDir,
-      );
-      for (let i = 0; i < chunks.length; i++) {
-        planned.push({ section, chunkIndex: i, totalChunks: chunks.length, bodyHtml: chunks[i]! });
+  // 默认字号为 42px；只允许一次有界压紧，最小 40px，不无限缩字凑页数。
+  const profiles = theme === 'default'
+    ? [baseCss, baseCss + '\n.content .body { font-size:40px; line-height:1.4; }\n.content .body p { margin-bottom:12px; }\n.content .body h2.inline-section-title { font-size:48px; }']
+    : [baseCss];
+  for (let pass = 0; pass < profiles.length; pass++) {
+    css = profiles[pass]!;
+    typography = pass === 0 ? 'standard' : 'compact';
+    planned.length = 0;
+    for (const section of pages) {
+      if (section.type === 'cover' || section.type === 'ending') {
+        planned.push({ section, chunkIndex: 0, totalChunks: 1, bodyHtml: section.bodyHtml });
+      } else {
+        const measured = await measureContentPagesWithChrome(
+          section.bodyHtml, css + dimensionCss, dims, size, availableHeight, contentWidth, baseDir,
+        );
+        for (let i = 0; i < measured.pages.length; i++) {
+          planned.push({ section, chunkIndex: i, totalChunks: measured.pages.length, bodyHtml: measured.pages[i]!, metrics: measured.metrics[i] });
+        }
       }
     }
+    if (planned.length <= MAX_CAROUSEL_IMAGES) break;
   }
 
   const totalPages = planned.length;
+  if (totalPages > MAX_CAROUSEL_IMAGES) {
+    throw new CarouselLimitError(totalPages, planned.flatMap(page => page.metrics ? [page.metrics] : []));
+  }
   const mainTitle = pages.find((p) => p.type === 'cover')?.title || '';
 
   // Phase 2: Render with known totalPages
   const images: string[] = [];
 
   for (let idx = 0; idx < planned.length; idx++) {
-    const { section, chunkIndex, bodyHtml } = planned[idx]!;
+    const { section, chunkIndex, bodyHtml, metrics } = planned[idx]!;
     const pageNum = idx + 1;
     let html: string;
 
@@ -1623,11 +1762,13 @@ export async function render(
       );
       html = resolveImagePaths(html, baseDir);
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-cover.png`);
+      await validatePageWithChrome(html, size);
       await renderWithChrome(html, imgPath, size.width, size.height);
       images.push(imgPath);
     } else if (section.type === 'ending') {
       html = buildEndingHtml(section.tags || [], section.author || resolvedAuthor, css + dimensionCss, pageNum, totalPages, dims);
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-ending.png`);
+      await validatePageWithChrome(html, size);
       await renderWithChrome(html, imgPath, size.width, size.height);
       images.push(imgPath);
     } else {
@@ -1646,6 +1787,7 @@ export async function render(
       html = resolveImagePaths(html, baseDir);
       const suffix = chunkIndex === 0 ? section.slug : `${section.slug}-${chunkIndex + 1}`;
       const imgPath = path.join(outDir, `${String(pageNum).padStart(2, '0')}-content-${suffix}.png`);
+      await validatePageWithChrome(html, size);
       await renderWithChrome(html, imgPath, size.width, size.height);
       images.push(imgPath);
     }
@@ -1654,11 +1796,30 @@ export async function render(
   const caption = generateCaption(title, resolvedAuthor, fm, topics);
   const captionPath = path.join(outDir, 'caption.md');
   fs.writeFileSync(captionPath, caption, 'utf-8');
-
-  return { images, captionPath, title, topics, totalPages };
+  const warnings = inspectReadingHtml(pages.filter((page) => page.type === 'content').map((page) => page.bodyHtml).join('\n'));
+  const imageMetrics = planned.flatMap((page) => page.metrics?.images || []);
+  for (const metric of imageMetrics) {
+    if (metric.displayWidth < contentWidth * 0.7) warnings.push(`图片 ${metric.sourceIndex} 显示偏窄，请在手机预览检查文字大小。`);
+    if (metric.sourceWidth < metric.displayWidth * 0.8) warnings.push(`图片 ${metric.sourceIndex} 原始分辨率偏低，放大不能补回细节。`);
+  }
+  for (const file of images) {
+    const actual = readImageSize(file);
+    if (!actual || actual.width !== size.width || actual.height !== size.height) throw new Error(`渲染尺寸不正确：${file}`);
+  }
+  const report: CarouselReport = {
+    title, aspect, width: size.width, height: size.height, contentWidth, availableHeight,
+    maxImages: MAX_CAROUSEL_IMAGES, typography,
+    textPreserved: true, imageOrderPreserved: true, warnings: [...new Set(warnings)],
+    pages: planned.map((page, index) => ({ file: path.basename(images[index]!), type: page.section.type, metrics: page.metrics, layoutChecked: true })),
+  };
+  const reportPath = path.join(outDir, 'render-report.json');
+  const previewPath = path.join(outDir, 'preview.html');
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
+  fs.writeFileSync(previewPath, buildPreviewHtml(report), 'utf8');
+  return { images, captionPath, title, topics, totalPages, reportPath, previewPath };
 }
 
-const GENERATED_XHS_FILE = /^(?:\d{2,}-.*\.png|caption\.md)$/i;
+const GENERATED_XHS_FILE = /^(?:\d{2,}-.*\.png|caption\.md|preview\.html|render-report\.json)$/i;
 
 export function commitGeneratedOutput(
   result: RenderResult,
@@ -1670,7 +1831,7 @@ export function commitGeneratedOutput(
     if (GENERATED_XHS_FILE.test(name)) fs.unlinkSync(path.join(outputDir, name));
   }
   const moved: string[] = [];
-  for (const source of [...result.images, result.captionPath]) {
+  for (const source of [...result.images, result.captionPath, result.previewPath, result.reportPath].filter((file): file is string => Boolean(file))) {
     const target = path.join(outputDir, path.basename(source));
     fs.renameSync(source, target);
     if (target.toLowerCase().endsWith('.png')) moved.push(target);
@@ -1679,6 +1840,8 @@ export function commitGeneratedOutput(
     ...result,
     images: moved,
     captionPath: path.join(outputDir, 'caption.md'),
+    previewPath: result.previewPath ? path.join(outputDir, 'preview.html') : undefined,
+    reportPath: result.reportPath ? path.join(outputDir, 'render-report.json') : undefined,
   };
 }
 
@@ -1704,8 +1867,9 @@ Environment:
 Output:
   <out>/01-cover.png
   <out>/02-content-<slug>.png
-  <out>/NN-ending.png
   <out>/caption.md
+  <out>/preview.html          整组总览及 360/390/430px 手机预览
+  <out>/render-report.json    文字、图片顺序、分段覆盖与布局检查
 
 Example:
   bun md-to-xhs.ts article.md --out ./xhs-images --author 作者名
@@ -1795,6 +1959,10 @@ async function main(): Promise<void> {
     console.log(`  → ${path.basename(img)}`);
   }
   console.log(`  → caption.md`);
+  console.log(`  → preview.html`);
+  console.log(`  → render-report.json`);
+  const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
+  for (const warning of report.warnings) console.warn(`[阅读检查] ${warning}`);
   console.log(`\nOutput JSON:`);
   console.log(JSON.stringify(result, null, 2));
 }

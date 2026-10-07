@@ -46,7 +46,9 @@ Managed layout:
 │   └── cover-xhs.png
 ├── xhs/
 │   ├── 01-cover.png
-│   └── caption.md
+│   ├── caption.md
+│   ├── preview.html
+│   └── render-report.json
 ├── douyin/
 │   └── douyin-caption.md
 └── .just-write/
@@ -69,8 +71,8 @@ Prefix every full-mode response with the current label. Stop at each checkpoint 
 1. `[Step 1: 选题讨论]` — Load `brainstorming`; confirm with `确认选题`.
 2. `[Step 2: 内容生成]` — Load `writing-style`, enforce its material gate, build the material card, choose an article archetype, and draft into the article directory. Before drafting, define the scope each central judgment can support from the available evidence. State the judgment directly within that scope, place any limit that changes the reader's interpretation beside the relevant claim, and do not preempt hypothetical objections. If material is insufficient, do not produce a long article: research, ask at most three questions in one message, or deliver a short piece as the gate specifies, and explain the choice. Do not load `humanizer-zh` during the first draft. Put factual image placeholders inline as `![描述](imgs/name.png)`. On `确认内容`, immediately list first-party screenshot sources.
 3. `[Step 3: 润色]` — Load `writing-style` and follow `references/quality-check.md` in its seven-pass order. Check defensive prose by function: remove sentences that only answer imagined criticism; express necessary limits as concrete scope next to the claim. If a judgment is too broad, narrow it before adding caveats. Verify that the edit preserves source attribution, numbers, causality, and real uncertainty. In pass five, load `humanizer-zh` and run `bun <humanizer-zh>/scripts/check-prose.ts <draft.md>` until hard failures are zero. Then complete the four-layer audit and its compact report; confirm with `确认润色`.
-4. `[Step 4: 排版优化]` — Load `baoyu-format-markdown`, produce 4–5 title candidates and `<title>-formatted.md`; confirm with `确认排版：X号`.
-5. `[Step 5: 配图与发布确认]` — Lock the chosen article title, rename the directory and same-name Markdown files without overwriting, verify `imgs/cover.png` and any inline images, and confirm WeChat with `确认发布微信`.
+4. `[Step 4: 排版优化]` — 加载 `baoyu-format-markdown` 及其 `references/reading-layout.md`，按语义组织段落、重点和明确换行，输出 `<title>-formatted.md`。仅在标题尚未锁定时生成 4–5 个候选；以 `确认排版：X号` 确认，或保留用户已明确指定的标题。
+5. `[Step 5: 配图与发布确认]` — 锁定选定标题，重命名目录和同名 Markdown 文件且不覆盖已有文件，核对 `imgs/cover.png` 和正文图片，用 `baoyu-post-to-wechat/scripts/wechat-preview.ts` 生成本地手机预览，检查阅读密度和截图文字，再以 `确认发布微信` 确认发布。
 6. `[Step 6: 发布]` — Load `baoyu-post-to-wechat`. After a successful WeChat draft, optionally offer Xiaohongshu materials when its config has `enabled: true`, then optionally offer Douyin.
 
 If a rename target exists, stop without overwriting. Remove only illegal path characters (`< > : " / \\ | ? *`), line breaks, surrounding whitespace, and trailing periods from filesystem names; keep the locked display title unchanged.
@@ -78,7 +80,7 @@ If a rename target exists, stop without overwriting. Remove only illegal path ch
 ## Direct modes
 
 - `polish`: load `writing-style` and revise in the seven-pass order from `references/quality-check.md`, first rescuing the person and material, then applying the Step 3 defensive-prose check and loading `humanizer-zh` in pass five. Run `check-prose.ts` until hard failures are zero, write the requested result, update state, and report the artifact. Do not ask for topic or publishing confirmation.
-- `format`: format and produce title candidates. Require title confirmation only if the user asks to generate platform assets afterward.
+- `format`：按共用手机阅读规则排版，保留锁定或明确指定的标题，否则生成标题候选。仅在用户接着要求生成平台素材且标题未确认时确认标题。
 - `wechat_publish`: require a formatted article, locked article title, cover/body assets, and `确认发布微信`; then load `baoyu-post-to-wechat`.
 - `xhs_materials`: require a formatted article, locked article title, and `imgs/cover-xhs.png` when a custom cover is expected; render into `<article-dir>/xhs`, update XHS status to `generated`, and stop with local paths.
 - `douyin_sync`: require `<article-dir>/xhs` and `<article-dir>/douyin/douyin-caption.md`; validate the independent title/body/topics, dry-run by default, and require `确认发布抖音` for upload.

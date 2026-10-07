@@ -30,10 +30,14 @@ codex plugin add just-write@just-write-local
 
 ### 本地开发
 
+v1.5.0 增加统一手机阅读排版、公众号离线预览，以及含封面最多 18 张的小红书连续分页。
+
 ```bash
 codex plugin marketplace add .
 codex plugin add just-write@just-write-local
 ```
+
+如果仅将技能安装到项目的 `.agents/skills/`，同步时需同时将 `plugins/just-write/lib/` 复制到 `.agents/lib/`，保留两者的相对目录结构；不要复制 `node_modules`，依赖使用各脚本目录内的锁文件安装。
 
 ## 使用方式
 
@@ -107,8 +111,9 @@ bun plugins/just-write/skills/humanizer-zh/scripts/check-prose.ts 稿件.md
 ├── xhs/
 │   ├── 01-cover.png
 │   ├── 02-content-*.png
-│   ├── NN-ending.png
-│   └── caption.md
+│   ├── caption.md
+│   ├── preview.html           # 整组总览与手机宽度预览
+│   └── render-report.json     # 文字完整性、图片范围和布局报告
 ├── douyin/
 │   └── douyin-caption.md
 └── .just-write/
@@ -131,6 +136,16 @@ bun plugins/just-write/skills/humanizer-zh/scripts/check-prose.ts 稿件.md
 | uv（可选） | 安装 `social-auto-upload`，用于抖音自动上传 |
 
 ## 微信公众号配置
+
+两条渲染链路统一段落与换行语义：普通源文件折行属于同一段，空行表示新段落，行末两个空格、反斜线或 `<br>` 表示明确换行。加粗只改变字重；需要底色时显式使用 `<mark>`。段落与重点按语义组织，不按字数机械切分，具体规则见 [手机阅读排版规则](plugins/just-write/skills/baoyu-format-markdown/references/reading-layout.md)。
+
+公众号 `default` 主题保留米白与暖色风格，采用 17px 系统无衬线正文、1.8 行高及清晰的标题层级；正文图片在上传后仍保持统一样式和自然比例。可以先生成离线手机预览，不调用公众号 API：
+
+```bash
+bun plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-preview.ts "文章-formatted.md" --out "wechat-preview.html" --theme default
+```
+
+预览支持 360/390/430px 阅读宽度，图片副本保存在相邻 `.assets` 目录。微信客户端可能调整字体及过滤样式，保存正式草稿后仍需核对。
 
 在文章工作目录创建 `.baoyu-skills/.env`：
 
@@ -167,7 +182,7 @@ default_topic_tags: AI观察,科技,编程
 
 只接受上面五个键。v1.3.0 不兼容旧的宽高比键和 dry-run 配置；发现已移除或未知键时会直接给出迁移错误。
 
-CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目录配置。插件流程不会复用固定话题：每次都从当篇文章的标题、摘要和核心观点提炼 3–5 个话题，并通过 `--tags` 显式传入；`caption.md` 与结束页只使用这组当篇话题。
+CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目录配置。插件流程不会复用固定话题：每次都从当篇文章的标题、摘要和核心观点提炼 3–5 个话题，并通过 `--tags` 显式传入；`caption.md` 只使用这组当篇话题。
 
 独立生成命令：
 
@@ -175,7 +190,9 @@ CLI 参数优先于配置文件。项目配置优先于 XDG 配置和用户目�
 bun plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.ts "[文章标题]/[文章标题]-formatted.md" --out "[文章标题]/xhs" --tags "当篇主题,具体对象,核心概念"
 ```
 
-渲染先写入临时目录，全部成功后才替换 `xhs/` 中受管的编号 PNG 和 `caption.md`，避免失败或页数变少时留下旧页面；无关文件不会被删除。
+渲染先写入临时目录，全部成功后才替换 `xhs/` 中受管的编号 PNG、`caption.md`、`preview.html` 和 `render-report.json`，避免失败或页数变少时留下旧页面；无关文件不会被删除。
+
+整组含封面最多 18 张。正文和图片按原文顺序连续排版，放满当前页再自然翻页；短文字不强制独立或居中，也不增加装饰性结束页。竖图保持内容宽度，按剩余空间分段，优先在空白处断开并保留少量重叠；尾段后继续正文。默认正文 42px，超限时只尝试一次 40px 紧凑排版，仍超限则报错并保留旧产物，不截断原文。渲染器检查文字完整性、图片顺序、分段连续覆盖、最终页面溢出及 PNG 尺寸。打开 `preview.html` 查看整组或手机宽度成图，并结合 `render-report.json` 检查每页占用比例、显示尺寸和长图范围。末页允许自然留白；低分辨率原图不能靠放大补回细节。
 
 小红书默认读取文章目录内的 `imgs/cover-xhs.png`。如需显式覆盖，可在 frontmatter 使用 `xhsCoverImage`；不会读取公众号的 `imgs/cover.png`。
 

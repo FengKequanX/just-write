@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadWechatExtendConfig, resolveAccount, loadCredentials } from "./wechat-extend-config.ts";
 import { resolveWechatCoverPath } from "./wechat-cover.ts";
+import { buildWechatBodyImageTag } from "./wechat-typography.ts";
 import {
   type WechatUploadAsset,
   prepareWechatBodyImageUpload,
@@ -372,7 +373,7 @@ async function uploadImagesInHtml(
         uploadedBySource.set(imagePath, resp);
       }
 
-      const replacementTag = `<img src="${resp.url}" style="display: block; width: 100%; margin: 1.5em auto;">`;
+      const replacementTag = buildWechatBodyImageTag(resp.url);
       updatedHtml = replaceAllPlaceholders(updatedHtml, image.placeholder, replacementTag);
       const shouldUploadMaterial = articleType === "newspic" || (collectNewsCoverFallback && !firstCoverMediaId);
       if (shouldUploadMaterial) {

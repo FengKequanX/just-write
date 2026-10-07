@@ -14,9 +14,9 @@ function assert(condition: unknown, message: string): asserts condition {
 const claude = json('plugins/just-write/.claude-plugin/plugin.json');
 const codex = json('plugins/just-write/.codex-plugin/plugin.json');
 const marketplace = json('.claude-plugin/marketplace.json') as { plugins?: Array<{ version?: string }> };
-assert(claude.version === '1.4.0', 'Claude plugin version must be 1.4.0');
-assert(codex.version === '1.4.0', 'Codex plugin version must be 1.4.0');
-assert(marketplace.plugins?.[0]?.version === '1.4.0', 'Marketplace version must match plugin version');
+assert(typeof claude.version === 'string' && /^\d+\.\d+\.\d+$/.test(claude.version), '插件版本必须符合语义化版本格式');
+assert(codex.version === claude.version, 'Claude 与 Codex 插件版本必须一致');
+assert(marketplace.plugins?.[0]?.version === claude.version, '市场版本必须与插件版本一致');
 
 const mainSkill = read('plugins/just-write/skills/just-write/SKILL.md');
 const writingStyle = read('plugins/just-write/skills/writing-style/SKILL.md');

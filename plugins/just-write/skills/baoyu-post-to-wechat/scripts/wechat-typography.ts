@@ -9,6 +9,15 @@ const LINE = "#E6E0D7";
 
 export const XHS_DEFAULT_ACCENT = "#D4563F";
 
+const BODY_FONT = "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
+const BODY_IMAGE_STYLE = "display: block; width: 100%; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid rgba(23, 23, 27, 0.07); border-radius: 6px; box-shadow: none;";
+
+/** Markdown 占位图和直接 HTML 图片共用最终图片样式。 */
+export function buildWechatBodyImageTag(url: string): string {
+  const escaped = url.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return `<img src="${escaped}" style="${BODY_IMAGE_STYLE}">`;
+}
+
 function colorWithAlpha(color: string, alpha: number): string {
   const hex = color.match(/^#([\da-f]{6})$/i)?.[1];
   if (!hex) return "rgba(212, 86, 63, 0.18)";
@@ -169,24 +178,24 @@ export function applyWechatEditorialTypography(
   const highlightColor = colorWithAlpha(primaryColor, 0.18);
   const tagStyles: Array<[string, string]> = [
     ["body", `padding: 24px 20px; background: ${PAPER}; color: ${INK};`],
-    ["section", `padding: 1px 2px 20px; background: ${PAPER}; font-family: Songti SC, SimSun, Noto Serif CJK SC, Georgia, serif; font-size: 16px; line-height: 1.95; text-align: left; color: ${BODY_TEXT}; word-break: break-word;`],
     ["h1", `display: block; margin: 0 0 1.8em; padding: 0; border: 0; color: ${INK}; background: transparent; font-family: KaiTi, STKaiti, Georgia, serif; font-size: 25px; font-weight: 700; line-height: 1.45; letter-spacing: 0.02em; text-align: left;`],
-    ["h2", `display: block; margin: 1.5em 0; padding: 0 0 0 12px; border: 0; border-left: 4px solid ${primaryColor}; border-radius: 0; color: ${INK}; background: transparent; font-family: KaiTi, STKaiti, Georgia, serif; font-size: 18px; font-weight: 700; line-height: 1.65; letter-spacing: 0.01em; text-align: left;`],
-    ["h3", `margin: 2.2em 0 0.75em; padding: 0; border: 0; color: ${INK}; background: transparent; font-family: KaiTi, STKaiti, Georgia, serif; font-size: 19px; font-weight: 700; line-height: 1.5; letter-spacing: 0.01em;`],
+    ["h2", `display: block; margin: 1.6em 0 0.7em; padding: 0 0 0 12px; border: 0; border-left: 4px solid ${primaryColor}; border-radius: 0; color: ${INK}; background: transparent; font-family: KaiTi, STKaiti, Georgia, serif; font-size: 20px; font-weight: 700; line-height: 1.5; letter-spacing: 0; text-align: left;`],
+    ["h3", `margin: 1.4em 0 0.6em; padding: 0; border: 0; color: ${INK}; background: transparent; font-size: 18px; font-weight: 700; line-height: 1.5; letter-spacing: 0; text-align: left;`],
     ["h4", `margin: 2em 0 0.7em; padding: 0; color: ${primaryColor}; font-size: 16px; font-weight: 650; line-height: 1.6;`],
     ["h5", `margin: 1.8em 0 0.6em; padding: 0; color: ${INK}; font-size: 16px; font-weight: 650; line-height: 1.6;`],
     ["h6", `margin: 1.8em 0 0.6em; padding: 0; color: ${MUTED}; font-size: 15px; font-weight: 600; line-height: 1.6;`],
-    ["p", `margin: 1.15em 0; color: ${BODY_TEXT}; font-size: 16px; line-height: 1.95; letter-spacing: 0.025em;`],
+    ["p", `margin: 0.95em 0; color: ${BODY_TEXT}; font-size: 17px; line-height: 1.8; letter-spacing: 0; text-align: left;`],
     ["blockquote", `margin: 1.7em 0; padding: 1em 1.15em; border: 0; border-left: 4px solid ${primaryColor}; border-radius: 0 8px 8px 0; color: ${MUTED}; background: ${ACCENT_WASH}; font-style: normal; line-height: 1.85;`],
     ["ul", `margin: 1.2em 0; padding: 0; list-style: none; color: ${BODY_TEXT};`],
     ["ol", `margin: 1.2em 0; padding: 0; list-style: none; color: ${BODY_TEXT};`],
     ["li", `display: block; margin: 0.55em 0; padding-left: 1.2em; color: ${BODY_TEXT}; line-height: 1.85; text-indent: -1.2em;`],
-    ["figure", "margin: 1.8em 0 1.4em;"],
-    ["img", "display: block; max-width: 100%; margin: 0 auto 0.65em; border: 1px solid rgba(23, 23, 27, 0.07); border-radius: 8px; box-shadow: 0 6px 18px rgba(64, 48, 37, 0.06);"],
+    ["figure", "margin: 1.2em 0;"],
+    ["img", BODY_IMAGE_STYLE],
     ["figcaption", `margin-top: 0.55em; color: ${LIGHT_TEXT}; font-size: 13px; line-height: 1.6; letter-spacing: 0.02em; text-align: center;`],
     ["hr", "display: none; width: 0; height: 0; margin: 0; border: 0; background: transparent; transform: none;"],
     ["a", `color: inherit; text-decoration: underline; text-decoration-color: ${primaryColor}; text-underline-offset: 3px;`],
-    ["strong", `color: ${INK}; background: linear-gradient(transparent 68%, ${highlightColor} 68%); font-size: inherit; font-weight: 700;`],
+    ["strong", `color: ${INK}; background: none; font-size: inherit; font-weight: 700;`],
+    ["mark", `color: ${INK}; background: ${highlightColor}; padding: 0 0.1em;`],
     ["em", `color: ${MUTED}; font-family: KaiTi, STKaiti, Georgia, serif; font-size: inherit; font-style: normal;`],
     ["table", `width: 100%; margin: 1.6em 0; border-collapse: collapse; color: ${INK}; font-size: 14px; line-height: 1.65;`],
     ["thead", `color: ${INK}; font-weight: 650;`],
@@ -199,11 +208,19 @@ export function applyWechatEditorialTypography(
     output = styleTags(output, tagName, style);
   }
 
+  // 容器样式只应用于文章根节点，避免覆盖代码行号等嵌套 section。
+  let styledContainer = false;
+  output = output.replace(/<section\b[^>]*>/gi, (tag) => {
+    if (styledContainer) return tag;
+    styledContainer = true;
+    return appendInlineStyle(tag, `padding: 1px 2px 20px; background: ${PAPER}; font-family: ${BODY_FONT}; font-size: 17px; line-height: 1.8; text-align: left; color: ${BODY_TEXT}; word-break: break-word;`);
+  });
+
   output = styleBlockChildren(
     output,
     "blockquote",
     "p",
-    `margin: 0; color: ${MUTED}; font-size: 15px; line-height: 1.85; letter-spacing: 0.02em;`,
+    `margin: 0.45em 0; color: ${MUTED}; font-size: 16px; line-height: 1.8; letter-spacing: 0;`,
   );
   output = styleClass(
     output,

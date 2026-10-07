@@ -3,6 +3,7 @@ import { renderMarkdownDocument } from "baoyu-md";
 
 import {
   applyWechatEditorialTypography,
+  buildWechatBodyImageTag,
   normalizeReferenceMarkdown,
   XHS_DEFAULT_ACCENT,
 } from "./wechat-typography.ts";
@@ -14,7 +15,7 @@ describe("applyWechatEditorialTypography", () => {
         <section class="container" style="font-size: 16px">
           <h2 class="h2" style="color: #fff; background: #0F4C81">章节标题</h2>
           <h3 class="h3">判断</h3>
-          <p class="p">正文 <strong>重点</strong></p>
+          <p class="p">正文 <strong>重点</strong> <mark>独立高亮</mark></p>
           <blockquote class="blockquote"><p class="p">引用内容</p></blockquote>
           <ul class="ul"><li class="listitem">• 列表项</li></ul>
         </section>
@@ -23,14 +24,14 @@ describe("applyWechatEditorialTypography", () => {
 
     const result = applyWechatEditorialTypography(html, "#285680");
 
-    expect(result).toContain("font-family: Songti SC, SimSun");
+    expect(result).toContain("font-family: -apple-system, BlinkMacSystemFont");
     expect(result).toContain("font-family: KaiTi, STKaiti");
-    expect(result).toContain("margin: 1.5em 0");
-    expect(result).toContain("font-size: 18px; font-weight: 700; line-height: 1.65");
+    expect(result).toContain("margin: 1.6em 0 0.7em");
+    expect(result).toContain("font-size: 20px; font-weight: 700; line-height: 1.5");
     expect(result).toContain("border-left: 4px solid #285680");
     expect(result).toContain("background: transparent");
     expect(result).toContain("text-indent: -1.2em");
-    expect(result).toContain("margin: 0; color: #4B5563");
+    expect(result).toContain("margin: 0.45em 0; color: #4B5563");
     expect(result).toContain("rgba(40, 86, 128, 0.18)");
   });
 
@@ -56,7 +57,7 @@ describe("applyWechatEditorialTypography", () => {
     const result = applyWechatEditorialTypography('<figure><img src="cover.png"/></figure>');
 
     expect(result).toContain('<img src="cover.png" style="');
-    expect(result).toContain('border-radius: 8px; box-shadow:');
+    expect(result).toContain('border-radius: 6px; box-shadow: none');
   });
 
   test("uses the carousel theme's warm paper and copper accent by default", () => {
@@ -66,6 +67,22 @@ describe("applyWechatEditorialTypography", () => {
     expect(result).toContain("border-left: 4px solid #D4563F");
     expect(result).toContain("display: none; width: 0; height: 0; margin: 0; border: 0");
     expect(result).not.toContain("border-top: 2px solid #D4563F");
+  });
+
+  test('占位图片和直接 HTML 图片使用相同样式，并保持原始比例', () => {
+    const placeholder = buildWechatBodyImageTag('https://example.com/image?a=1&b=2');
+    const direct = applyWechatEditorialTypography('<section><img src="image.png"></section>');
+    const imageStyle = (html: string) => html.match(/<img\b[^>]*style="([^"]+)"/)?.[1];
+    expect(imageStyle(placeholder)).toBe(imageStyle(direct));
+    expect(imageStyle(placeholder)).toContain('height: auto');
+    expect(placeholder).toContain('a=1&amp;b=2');
+  });
+
+  test('普通加粗没有背景色，显式高亮独立保留，嵌套代码容器不被覆盖', () => {
+    const result = applyWechatEditorialTypography('<section class="container"><p><strong>重点</strong><mark>高亮</mark></p><section class="code-scroll" style="padding:8px">代码</section></section>');
+    expect(result.match(/<strong[^>]*>/)?.[0]).toContain('background: none');
+    expect(result.match(/<mark[^>]*>/)?.[0]).not.toContain('background: none');
+    expect(result.match(/<section class="code-scroll"[^>]*>/)?.[0]).toBe('<section class="code-scroll" style="padding:8px">');
   });
 
   test("normalizes unnumbered source sections without inventing citation numbers", () => {

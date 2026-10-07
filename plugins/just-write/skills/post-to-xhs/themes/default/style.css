@@ -17,7 +17,7 @@
   --accent-bg-light: #FFF8F4;
   --border: #E6E0D7;
   --font-display: "KaiTi", "楷体", Georgia, serif;
-  --font-body: "Songti SC", "SimSun", "Noto Serif CJK SC", Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-mono: "Consolas", monospace;
 }
 
@@ -193,10 +193,12 @@ body {
 }
 
 .cover--text-only .title {
-  font-size: 78px;
+  font-size: var(--cover-title-size);
   line-height: 1.3;
   max-width: 900px;
 }
+
+.cover--text-only { --cover-title-size: 78px; }
 
 .cover--text-only .subtitle {
   margin-top: 36px;
@@ -206,7 +208,7 @@ body {
 /* ==================== Content Page — Base ==================== */
 
 .content {
-  padding: 70px 70px 88px;
+  padding: 56px 70px 56px;
   background:
     linear-gradient(180deg, rgba(212, 86, 63, 0.018) 0%, transparent 20%),
     var(--bg);
@@ -227,7 +229,7 @@ body {
 /* Running article title inside the top padding — keeps carousel pages identifiable */
 .page-kicker {
   position: absolute;
-  top: 26px;
+  top: 22px;
   left: 70px;
   font-family: var(--font-mono);
   font-size: 17px;
@@ -249,8 +251,9 @@ body {
 }
 
 .content .body {
-  font-size: 36px;
-  line-height: 1.68;
+  font-size: 42px;
+  line-height: 1.5;
+  display: flow-root;
   color: #202124;
   flex: 1;
   font-weight: 500;
@@ -260,8 +263,8 @@ body {
 }
 
 .content .body p {
-  margin-bottom: 30px;
-  text-align: justify;
+  margin-bottom: 18px;
+  text-align: left;
 }
 
 .content .body h2,
@@ -277,12 +280,12 @@ body {
 .content .body .inline-section-title,
 .content .body h2.inline-section-title {
   font-family: var(--font-display);
-  font-size: 38px;
+  font-size: 50px;
   font-weight: 700;
   line-height: 1.35;
   color: #202124;
   padding-left: 18px;
-  margin: 16px 0 26px;
+  margin: 14px 0 20px;
   border-left: 5px solid var(--accent);
   letter-spacing: 0;
   text-wrap: balance;
@@ -295,7 +298,7 @@ body {
 
 .content .body h3 {
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 44px;
   font-weight: 700;
   line-height: 1.35;
   color: #202124;
@@ -306,7 +309,13 @@ body {
 .content .body strong {
   font-weight: 700;
   color: var(--text);
-  background: linear-gradient(transparent 66%, rgba(212, 86, 63, 0.20) 66%);
+  background: none;
+}
+
+.content .body mark {
+  color: var(--text);
+  background: rgba(212, 86, 63, 0.16);
+  padding: 0 0.1em;
 }
 
 /* CJK has no italics: KaiTi is the traditional "annotation voice" */
@@ -327,11 +336,11 @@ body {
 
 /* Fully-emphasized paragraphs read as image captions / annotations */
 .content .body p:has(> em:only-child) {
-  font-size: 27px;
+  font-size: 30px;
   line-height: 1.7;
   color: var(--text-light);
   text-align: left;
-  margin: -6px 0 34px;
+  margin: 14px 0 24px;
   padding-left: 18px;
   border-left: 3px solid var(--border);
 }
@@ -343,41 +352,59 @@ body {
 .content .body img {
   width: 100%;
   height: auto;
-  max-height: 480px;
-  object-fit: contain;
-  border-radius: 8px;
-  margin: 22px 0 28px;
+  max-height: none;
+  border-radius: 6px;
+  margin: 16px auto;
   display: block;
   background: #FFFFFF;
   border: 1px solid rgba(23, 23, 27, 0.07);
-  box-shadow: 0 8px 22px rgba(23, 23, 27, 0.06);
+  box-shadow: none;
 }
 
 .content .body p:has(> img:only-child) {
   width: 100%;
-  max-height: 480px;
-  margin: 22px 0 28px;
+  margin: 16px 0;
   padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: #FFFFFF;
-  border: 1px solid rgba(23, 23, 27, 0.07);
-  border-radius: 8px;
-  box-shadow: 0 8px 22px rgba(23, 23, 27, 0.06);
+  display: block;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .content .body p:has(> img:only-child) img {
   width: 100%;
   height: auto;
-  max-height: 480px;
-  object-fit: contain;
+  max-height: none;
   margin: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+}
+
+/* 仅显式指定的独立图片页居中；正文和长图分段从顶部连续阅读。 */
+.content--image-page .body {
+  flex: none;
+  margin: auto 0;
+}
+
+.xhs-image-page { display: flow-root; }
+.xhs-flow-image { display: flow-root; margin: 12px 0; }
+.content .body .xhs-image-page img { margin: 0 auto; border: 0; }
+.xhs-image-frame { position: relative; overflow: hidden; width: 100%; }
+.content .body .xhs-image-frame img { position: absolute; left: 0; border-radius: 0; }
+.xhs-image-continuation {
+  font-size: 24px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  color: var(--text-sec);
+  font-family: var(--font-body);
+}
+.content .body figcaption {
+  font-size: 30px;
+  line-height: 1.5;
+  color: var(--text-sec);
+  margin-top: 14px;
 }
 
 .content .body table {
@@ -419,13 +446,15 @@ body {
 
 .content .body blockquote {
   border-left: 5px solid var(--accent);
-  padding: 16px 22px;
+  padding: 12px 22px;
   background: rgba(255, 248, 244, 0.88);
   color: var(--text);
   font-style: normal;
-  margin: 24px 0;
+  margin: 18px 0;
   border-radius: 0 8px 8px 0;
 }
+
+.content .body blockquote > :last-child { margin-bottom: 0; }
 
 .content .body ul,
 .content .body ol {
@@ -435,8 +464,8 @@ body {
 
 .content .body li {
   margin-bottom: 12px;
-  line-height: 1.68;
-  text-align: justify;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .content .body ul li::marker { color: var(--accent); }
