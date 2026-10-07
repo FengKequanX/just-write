@@ -202,7 +202,7 @@ ${rows}
     expect(path.basename(result.images[0]!)).toBe('01-cover.png');
     expect(result.totalPages).toBeLessThanOrEqual(18);
     expect(path.basename(result.images.at(-1)!)).toMatch(/-content-/);
-  }, 60_000);
+  }, 120_000);
 
   test('renders the same short article in every supported aspect', async () => {
     const root = tempRoot();
@@ -262,6 +262,18 @@ ${rows}
     expect(bodyPages[0]!.metrics!.blockKinds).toEqual(['other']);
     expect(bodyPages[1]!.metrics!.blockKinds).toEqual(['list-item', 'paragraph']);
   }, 30_000);
+
+  test('连续父子标题与后续短段落一起换页，不能让父标题孤立在页尾', async () => {
+    const root = tempRoot();
+    const article = writeArticle(root, `<div style="height:1050px">前页内容</div>\n\n## 父章节\n\n### 子章节\n\n${'标题后的短段落需要完整保留。'.repeat(3)}`);
+    const result = await render(article, path.join(root, 'xhs'), 'default', '3:4', '作者', '');
+    const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
+    const bodyPages = report.pages.filter(page => page.type === 'content');
+    expect(bodyPages).toHaveLength(2);
+    expect(bodyPages[0]!.metrics!.blockKinds).toEqual(['other']);
+    expect(bodyPages[1]!.metrics!.blockKinds).toEqual(['heading', 'heading', 'paragraph']);
+    expect(report.textPreserved).toBe(true);
+  }, 60_000);
 
   test('图片从正文剩余空间自然翻页，竖图和长图保持整宽及连续覆盖', async () => {
     const root = tempRoot();

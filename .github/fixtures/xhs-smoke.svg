@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <rect width="900" height="420" fill="#FBFAF7"/>
+  <rect x="40" y="40" width="820" height="340" rx="12" fill="#FFF0EA" stroke="#D4563F" stroke-width="4"/>
+  <text x="80" y="170" font-family="sans-serif" font-size="48" fill="#17171B">轮播图片渲染测试</text>
+  <text x="80" y="260" font-family="sans-serif" font-size="32" fill="#4B5563">保持比例 · 保留内容 · 连续分页</text>
+</svg>

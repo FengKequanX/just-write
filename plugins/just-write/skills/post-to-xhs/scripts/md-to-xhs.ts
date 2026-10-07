@@ -1236,6 +1236,7 @@ async function measureContentPagesWithChrome(
         const prefixWithLines = (block, minimumLines) => {
           if (block.hasImage) return minimumImagePrefix(block);
           if (visibleLength(block.html) === 0) return block.html;
+          if (lineCount(block.html) < 4) return block.html;
           const total = visibleLength(block.html);
           let low = 1;
           let high = total - 1;
@@ -1256,26 +1257,36 @@ async function measureContentPagesWithChrome(
         const blocks = mergeImageCaptions(extractBlocks(source.innerHTML));
         const pages = [];
         let current = '';
+        let pendingHeading = '';
 
         for (let i = 0; i < blocks.length; i++) {
           const block = blocks[i];
           if (block.kind === 'heading') {
-            const next = blocks[i + 1];
+            // 连续父子标题视作一组，与后续正文一起决定是否换页。
+            let headingEnd = i;
+            let headings = block.html;
+            while (blocks[headingEnd + 1]?.kind === 'heading') headings += blocks[++headingEnd].html;
+            const next = blocks[headingEnd + 1];
             if (!next) throw new Error('heading has no following content');
-            const imagePages = planImagePages(next, block.html);
+            const imagePages = planImagePages(next, headings);
             if (imagePages) {
               if (current.trim()) pages.push(current);
               current = '';
               pages.push(...imagePages);
-              i++;
+              pendingHeading = '';
+              i = headingEnd + 1;
               continue;
             }
-            const required = block.html + prefixWithLines(next, 2);
+            const required = headings + prefixWithLines(next, 2);
             if (heightOf(required) > limit) throw new Error('heading and two following lines exceed one page');
             if (current.trim() && heightOf(current + required) > limit) {
               pages.push(current);
               current = '';
             }
+            current += headings;
+            pendingHeading = headings;
+            i = headingEnd;
+            continue;
           }
 
           const imagePages = planImagePages(block);
@@ -1288,6 +1299,7 @@ async function measureContentPagesWithChrome(
 
           if (heightOf(current + block.html) <= limit) {
             current += block.html;
+            pendingHeading = '';
             continue;
           }
 
@@ -1301,12 +1313,22 @@ async function measureContentPagesWithChrome(
                   : splitTextToFit(current, block, true)
               : null;
             if (split) {
+              pendingHeading = '';
               if (split.tail) {
                 pages.push(current + split.head);
                 current = '';
                 blocks[i] = blockFromHtml(split.tail, block.kind);
                 i--;
               } else current += split.head;
+              continue;
+            }
+            if (pendingHeading) {
+              // 标题预估前缀可容纳，但正文不能安全拆分时，将整组标题带到下一页。
+              const preceding = current.slice(0, -pendingHeading.length);
+              if (!preceding.trim()) throw new Error('标题与后续内容无法安全放在同一页');
+              pages.push(preceding);
+              current = pendingHeading;
+              i--;
               continue;
             }
             pages.push(current);
