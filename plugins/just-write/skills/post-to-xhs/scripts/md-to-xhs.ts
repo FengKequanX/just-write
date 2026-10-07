@@ -53,6 +53,8 @@ const ASPECT_SIZES: Record<string, AspectSize> = {
 const DEFAULT_ASPECT = '3:4';
 const MAX_TOPIC_TAGS = 5;
 export const MAX_CAROUSEL_IMAGES = 18;
+// 复杂文章需要多次测量和拆分，分页的限时与单页截图分别设置。
+const PAGINATION_TIMEOUT_MS = 90_000;
 const CONTENT_TOP_PAD = 56;
 const CONTENT_BOTTOM_PAD = 56;
 const PAGE_NUM_HEIGHT = 0;
@@ -167,6 +169,7 @@ function dumpDomWithChrome(
   html: string,
   width: number,
   height: number,
+  timeoutMs = 30_000,
 ): Promise<string> {
   const chrome = findChrome();
   const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -192,8 +195,8 @@ function dumpDomWithChrome(
     const proc = spawn(chrome, args, { stdio: 'pipe' });
     const timeout = setTimeout(() => {
       proc.kill();
-      reject(new Error('Chrome DOM dump timed out'));
-    }, 30_000);
+      reject(new Error(`Chrome DOM 测量超时（${timeoutMs / 1000} 秒）`));
+    }, timeoutMs);
 
     let stdout = '';
     let stderr = '';
@@ -1443,7 +1446,7 @@ async function measureContentPagesWithChrome(
   // finishes on a cold start; one retry absorbs that flakiness.
   let match: RegExpMatchArray | null = null;
   for (let attempt = 0; attempt < 2 && !match; attempt++) {
-    const dom = await dumpDomWithChrome(html, size.width, size.height);
+    const dom = await dumpDomWithChrome(html, size.width, size.height, PAGINATION_TIMEOUT_MS);
     match = dom.match(/<pre id="xhs-measure-result">([^<]+)<\/pre>/);
   }
   if (!match) throw new Error('[md-to-xhs] Pagination failed: Chrome returned no measurement result');
