@@ -5,6 +5,9 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { launchChrome, tryConnectExisting, findExistingChromeDebugPort, getPageSession, waitForNewTab, clickElement, typeText, evaluate, sleep, getAccountProfileDir, type ChromeSession, type CdpConnection } from './cdp.ts';
 import { loadWechatExtendConfig, resolveAccount } from './wechat-extend-config.ts';
+import { operationResult, platformExitCode, type PlatformOperationResult } from '../../../lib/platform-result';
+import { finishBrowserDraft } from './wechat-save-draft';
+import { parseBrowserArgs, readWechatMetadata, ensureTitleAgreement } from './wechat-cli';
 
 const WECHAT_URL = 'https://mp.weixin.qq.com/';
 
@@ -14,7 +17,7 @@ interface ImageInfo {
   originalPath: string;
 }
 
-interface ArticleOptions {
+export interface ArticleOptions {
   title: string;
   content?: string;
   htmlFile?: string;
@@ -29,6 +32,7 @@ interface ArticleOptions {
   submit?: boolean;
   profileDir?: string;
   cdpPort?: number;
+  account?: string;
 }
 
 async function waitForLogin(session: ChromeSession, timeoutMs = 120_000): Promise<boolean> {
@@ -203,12 +207,12 @@ async function parseMarkdownWithPlaceholders(
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const mdToWechatScript = path.join(__dirname, 'md-to-wechat.ts');
-  const args = ['-y', 'bun', mdToWechatScript, markdownPath];
+  const args = [mdToWechatScript, markdownPath];
   if (theme) args.push('--theme', theme);
   if (color) args.push('--color', color);
   if (!citeStatus) args.push('--no-cite');
 
-  const result = spawnSync('npx', args, { stdio: ['inherit', 'pipe', 'pipe'] });
+  const result = spawnSync(process.versions.bun ? process.execPath : 'bun', args, { stdio: ['inherit', 'pipe', 'pipe'] });
   if (result.status !== 0) {
     const stderr = result.stderr?.toString() || '';
     throw new Error(`Failed to parse markdown: ${stderr}`);
@@ -400,7 +404,7 @@ async function removeExtraEmptyLineAfterImage(session: ChromeSession): Promise<b
   return removed;
 }
 
-export async function postArticle(options: ArticleOptions): Promise<void> {
+export async function postArticle(options: ArticleOptions): Promise<PlatformOperationResult> {
   const { title, content, htmlFile, markdownFile, theme, color, citeStatus = true, author, summary, images = [], submit = false, profileDir, cdpPort } = options;
   let { contentImages = [] } = options;
   let effectiveTitle = title || '';
@@ -437,6 +441,7 @@ export async function postArticle(options: ArticleOptions): Promise<void> {
   }
 
   if (effectiveTitle && effectiveTitle.length > 64) throw new Error(`Title too long: ${effectiveTitle.length} chars (max 64)`);
+  if (effectiveSummary.length > 120) throw new Error(`摘要超出 120 字符：${effectiveSummary.length}；请调整后重试`);
   if (!content && !effectiveHtmlFile) throw new Error('Either --content, --html, or --markdown is required');
 
   let cdp: CdpConnection;
@@ -669,119 +674,66 @@ export async function postArticle(options: ArticleOptions): Promise<void> {
       }
     }
 
-    console.log('[wechat] Saving as draft...');
-    await evaluate(session, `document.querySelector('#js_submit button').click()`);
-    await sleep(3000);
-
-    const saved = await evaluate<boolean>(session, `!!document.querySelector('.weui-desktop-toast')`);
-    if (saved) {
-      console.log('[wechat] Draft saved successfully!');
-    } else {
-      console.log('[wechat] Waiting for save confirmation...');
-      await sleep(5000);
-    }
-
-    console.log('[wechat] Done. Browser window left open.');
+    return await finishBrowserDraft(submit, { evaluate: expression => evaluate<unknown>(session, expression), wait: sleep },
+      { account: options.account, inputSummary: { title: effectiveTitle, summaryLength: effectiveSummary.length } });
   } finally {
     cdp.close();
   }
 }
 
 function printUsage(): never {
-  console.log(`Post article to WeChat Official Account
-
-Usage:
-  npx -y bun wechat-article.ts [options]
-
-Options:
-  --title <text>     Article title (auto-extracted from markdown)
-  --content <text>   Article content (use with --image)
-  --html <path>      HTML file to paste (alternative to --content)
-  --markdown <path>  Markdown file to convert and post (recommended)
-  --theme <name>     Theme for markdown (default, grace, simple, modern)
-  --color <name|hex> Primary color (blue, green, vermilion, etc. or hex)
-  --no-cite          Disable bottom citations for ordinary external links in markdown mode
-  --author <name>    Author name
-  --summary <text>   Article summary
-  --image <path>     Content image, can repeat (only with --content)
-  --submit           Save as draft
-  --profile <dir>    Chrome profile directory
-  --account <alias>  Select account by alias (for multi-account setups)
-  --cdp-port <port>  Connect to existing Chrome debug port instead of launching new instance
-
-Examples:
-  npx -y bun wechat-article.ts --markdown article.md
-  npx -y bun wechat-article.ts --markdown article.md --theme grace --submit
-  npx -y bun wechat-article.ts --markdown article.md --no-cite
-  npx -y bun wechat-article.ts --title "标题" --content "内容" --image img.png
-  npx -y bun wechat-article.ts --title "标题" --html article.html --submit
-
-Markdown mode:
-  Images in markdown are converted to placeholders. After pasting HTML,
-  each placeholder is selected, scrolled into view, deleted, and replaced
-  with the actual image via paste. Ordinary external links are converted to
-  bottom citations by default.
-`);
+  console.log(`将文章预填到微信编辑器；默认不保存。
+用法：bun wechat-article.ts [选项]
+  --markdown <path>  转换 Markdown（推荐）
+  --html <path>      使用 HTML
+  --title <text>     标题，最多 64 字符
+  --content <text>   正文，配合 --image
+  --image <path>     正文图片，可重复
+  --author <name>    作者
+  --summary <text>   摘要，最多 120 字符，超限报错
+  --theme <name>     主题；CLI > frontmatter > 账号/全局配置 > default
+  --color <name|hex> 主色，使用相同优先级
+  --no-cite          关闭普通外链的文末引用
+  --profile <dir>    浏览器目录
+  --account <alias>  明确目标账号
+  --cdp-port <port>  连接已有 Chrome 调试端口
+  --save-draft       明确保存草稿
+  --submit           保存开关的兼容别名
+  --json             JSON 结果，日志写入 stderr
+  --help             帮助
+退出码：0 预填完成；1 平台拒绝；2 参数/运行错误；3 保存或验证待核验。
+界面保存提示不能代替草稿内容读回核对。`);
   process.exit(0);
 }
-
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+export async function main(args = process.argv.slice(2)): Promise<number> {
   if (args.includes('--help') || args.includes('-h')) printUsage();
 
-  const images: string[] = [];
-  let title: string | undefined;
-  let content: string | undefined;
-  let htmlFile: string | undefined;
-  let markdownFile: string | undefined;
-  let theme: string | undefined;
-  let color: string | undefined;
-  let citeStatus = true;
-  let author: string | undefined;
-  let summary: string | undefined;
-  let submit = false;
-  let profileDir: string | undefined;
-  let cdpPort: number | undefined;
-  let accountAlias: string | undefined;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
-    if (arg === '--title' && args[i + 1]) title = args[++i];
-    else if (arg === '--content' && args[i + 1]) content = args[++i];
-    else if (arg === '--html' && args[i + 1]) htmlFile = args[++i];
-    else if (arg === '--markdown' && args[i + 1]) markdownFile = args[++i];
-    else if (arg === '--theme' && args[i + 1]) theme = args[++i];
-    else if (arg === '--color' && args[i + 1]) color = args[++i];
-    else if (arg === '--cite') citeStatus = true;
-    else if (arg === '--no-cite') citeStatus = false;
-    else if (arg === '--author' && args[i + 1]) author = args[++i];
-    else if (arg === '--summary' && args[i + 1]) summary = args[++i];
-    else if (arg === '--image' && args[i + 1]) images.push(args[++i]!);
-    else if (arg === '--submit') submit = true;
-    else if (arg === '--profile' && args[i + 1]) profileDir = args[++i];
-    else if (arg === '--account' && args[i + 1]) accountAlias = args[++i];
-    else if (arg === '--cdp-port' && args[i + 1]) cdpPort = parseInt(args[++i]!, 10);
-  }
-
+  const options = parseBrowserArgs(args, 'article');
+  const metadata = readWechatMetadata(options.markdownFile);
+  ensureTitleAgreement(metadata, options.title);
   const extConfig = loadWechatExtendConfig();
-  const resolved = resolveAccount(extConfig, accountAlias);
-  if (resolved.name) console.log(`[wechat] Account: ${resolved.name} (${resolved.alias})`);
-
-  if (!author && resolved.default_author) author = resolved.default_author;
-
-  if (!profileDir && resolved.alias) {
-    profileDir = resolved.chrome_profile_path || getAccountProfileDir(resolved.alias);
-  }
-
-  if (!markdownFile && !htmlFile && !title) { console.error('Error: --title is required (or use --markdown/--html)'); process.exit(1); }
-  if (!markdownFile && !htmlFile && !content) { console.error('Error: --content, --html, or --markdown is required'); process.exit(1); }
-
-  await postArticle({ title: title || '', content, htmlFile, markdownFile, theme, color, citeStatus, author, summary, images, submit, profileDir, cdpPort });
+  const resolved = resolveAccount(extConfig, options.accountAlias);
+  const { markdownFile, htmlFile } = options;
+  if (!markdownFile && !htmlFile && !options.title) throw new Error('需要 --title 或 --markdown/--html');
+  if (!markdownFile && !htmlFile && !options.content) throw new Error('需要 --content、--html 或 --markdown');
+  const originalLog = console.log;
+  if (options.json) console.log = console.error;
+  try {
+    const result = await postArticle({ ...options, title: options.title ?? '',
+      author: options.author ?? metadata.author ?? resolved.default_author,
+      summary: options.summary ?? metadata.digest ?? metadata.summary ?? metadata.description,
+      theme: options.theme ?? metadata.theme ?? resolved.default_theme ?? 'default',
+      color: options.color ?? metadata.color ?? resolved.default_color,
+      profileDir: options.profileDir ?? resolved.chrome_profile_path ?? (resolved.alias ? getAccountProfileDir(resolved.alias) : undefined),
+      account: resolved.alias ?? resolved.source,
+    });
+    originalLog(JSON.stringify(result, null, 2)); return platformExitCode(result);
+  } finally { console.log = originalLog; }
 }
 
-await main().then(() => {
-  process.exit(0);
+if (import.meta.main) await main().then(code => {
+  process.exitCode = code;
 }).catch((err) => {
   console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
+  process.exitCode = 2;
 });

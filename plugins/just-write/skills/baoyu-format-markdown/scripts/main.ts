@@ -79,7 +79,15 @@ function formatMarkdownContent(
 
   let result = processor.stringify(tree);
   if (options.emphasis) {
-    result = decodeHtmlEntities(result);
+    // 代码、链接目标和 frontmatter 的字面实体不属于排印修复范围。
+    const protectedPattern = /(?:^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)|^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[ \t]*$|`+[^`\n]*`+|\]\([^\n)]*\)|<[^>]*>)/gm;
+    let offset = 0;
+    let safe = '';
+    for (const match of result.matchAll(protectedPattern)) {
+      safe += decodeHtmlEntities(result.slice(offset, match.index)) + match[0];
+      offset = match.index! + match[0].length;
+    }
+    result = safe + decodeHtmlEntities(result.slice(offset));
   }
   return result;
 }
@@ -160,7 +168,7 @@ Options:
   return { filePath, options };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const { filePath, options } = parseArgs(process.argv.slice(2));
 
   if (!filePath) {

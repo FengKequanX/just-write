@@ -1,53 +1,26 @@
-# Title Formulas Reference
+# 标题建议
 
-8 hook formulas + straightforward style for balanced title generation.
+只有本次要求标题优化、候选或平台独立标题时读取。标题是对正文范围的准确承诺，不能借公式新增事实。
 
-## Hook Formulas
+## 推荐顺序
 
-| # | Formula | Characteristics | Example |
-|---|---------|----------------|---------|
-| 1 | Subversive | Deny common belief, create cognitive conflict | "All de-AI-flavor prompts are wrong" |
-| 2 | Solution | Give the answer directly, promise concrete value | "One recipe to make AI write in your voice" |
-| 3 | Suspense | Reveal half, spark a curiosity gap | "It took me six months to find how to remove AI flavor" |
-| 4 | Concrete Number | Use specific numbers for credibility and impact | "150 lines of docs taught AI my writing style" |
-| 5 | Contrast | Small cause → big result, or expectation vs reality | "One doc replaced three months of AI tuning" |
-| 6 | Result First | Lead with a surprising outcome, hook reader to find out why | "After using this method, nobody could tell it was AI" |
-| 7 | Rhetorical Question | Ask a question that creates an unfinished feeling | "Why can people spot your AI writing at a glance?" |
-| 8 | Empathy | Touch pain points, trigger shared frustration or relief | "Three months fighting AI flavor — I finally broke free" |
+先看准确性与范围，再看读者用途、作者语气、辨识度及长度。用户指定标题或上游已有明确确认时原样保留。平台长度是平台约束，不是所有文章统一“30 字”规则；超限需要独立平台标题或用户决定，不能截断受保护标题。
 
-### When to pick each formula
+生成适量有实质区别的候选，说明各自重点。描述式或直述判断的标题可以首推；不默认否定更有力、不要求前五字制造信息差，也不机械列五个。
 
-| Formula | Best for |
-|---------|----------|
-| Subversive | Articles that challenge mainstream advice or debunk myths |
-| Solution | How-to guides, tutorials, actionable advice pieces |
-| Suspense | Personal stories, case studies, journey narratives |
-| Concrete Number | Data-driven articles, benchmarks, step-by-step guides |
-| Contrast | Before/after stories, unexpected discoveries, comparisons |
-| Result First | Success stories, transformation pieces, "I tried X" articles |
-| Rhetorical Question | Problem-awareness pieces, diagnostic/explainer content |
-| Empathy | Struggle narratives, community pain points, relatable experiences |
+## 可采用的表达
 
-## Straightforward Style
+| 方式 | 使用条件 | 例子（仅为写法示意） |
+|---|---|---|
+| 描述 | 读者需要知道问题和范围 | “闭环控制中的测量噪声” |
+| 直述判断 | 正文有充分支持的中心结论 | “缓存命中仍可能读到旧内容” |
+| 操作目标 | 文章给出完整适用流程 | “怎样检查导出的 PDF 是否完整” |
+| 问题 | 正文确实回答这一疑问 | “摘要为什么不能代表全文？” |
+| 对比 | 比较维度与结论清楚 | “本地预览与草稿读回分别检查什么” |
+| 数字／经历／结果 | 相应数值、亲历或测试结果已在材料中 | 使用原文实际数据，不为标题编造耗时或效果 |
 
-Not every title needs a hook. Straightforward titles work well as alternatives:
+例子不表示正在写的文章具有这些内容。情绪、悬念、反常识等形式只有符合作者与材料才采用；不能把“有人争论”改成“所有人都错了”。
 
-- **Descriptive**: clearly state the topic and scope
-- **Declarative**: state the main conclusion or thesis directly
+## 最后核对
 
-These provide balance — readers who prefer clarity over curiosity will appreciate them.
-
-## Title Principles
-
-- **Hook in first 5 characters**: create information gap or cognitive conflict
-- **Specific > abstract**: "150 lines" beats "a document"
-- **Negation > affirmation**: "you're doing it wrong" beats "the right way"
-- **Conversational**: like chatting with a friend, not an academic paper
-- **Max ~30 characters**: longer titles get truncated in feeds
-- **Accurate, not clickbait**: the article must deliver what the title promises — titles can be bold but the content must back them up
-
-## Prohibited Patterns
-
-- Vague academic-style: "On XX", "Thoughts on XX", "Exploration and Practice of XX"
-- Pure shock bait: "Shocking!", "10,000-word essay", "Must bookmark"
-- Directionless questions: "Where is the future of AI writing?"
+读者从标题预期的问题，正文是否回答？措辞有没有扩大证据范围、冒充作者亲历或隐藏条件？原标题若已准确，不必为展示优化而替换。

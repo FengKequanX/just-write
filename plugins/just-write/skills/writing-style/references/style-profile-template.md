@@ -1,47 +1,37 @@
-# Project Style Profile Template
+# 作者画像模板
 
-Store the profile at `.baoyu-skills/writing-style/STYLE.md`. Keep it concise and evidence-based.
+只有用户请求创建或修改画像时使用，保存到 `.baoyu-skills/writing-style/STYLE.md`。画像记录认可过的稳定取舍，不把通用建议升级为个人禁令。
 
 ```markdown
-# Author voice
+# 作者与读者
 
-One sentence describing who is speaking, to whom, and with what posture.
+作者位置、常写对象、读者知识起点。
 
-## Editorial position
+## 稳定偏好
 
-- Topics and audience
-- What the account is not
-- What makes a topic worth writing
+- 实际认可的语气、判断方式与节奏。
+- 来源、推断和亲历通常怎样表达。
+- 哪些偏好在多份样本中反复成立。
 
-## Voice
+## 项目默认
 
-- Stable qualities
-- Preferred perspective
-- Judgment and uncertainty
-- Paragraph and heading habits
+- 本项目的目标读者、常用文类和发布需求。
+- 默认排版与引用习惯；本次请求可以覆盖。
 
-## Evidence rules
+## 文类变化
 
-- First-party source preference
-- How to label vendor claims, third-party tests, and inference
-- What must never be invented
+- 教程、技术解释、个人反思等分别需要什么。
+- 不要求所有文章使用同一种开头、第一人称或结尾。
 
-## Article tendencies
+## 明确禁令与例外
 
-- Common openings
-- Common narrative moves
-- Preferred endings
-- Formatting choices
+- 仅记录作者明确提出的禁止项及其范围。
+- 真实引语、必要术语和指定保留片段如何处理。
+- 可选机器规则文件：prose-rules.json（由 agent 显式传给检查器）。
 
-## Avoid
+## 认可样本
 
-- Tone and structure failures
-- Unsupported claims
-- Overused phrases observed in actual drafts
-
-## Representative samples
-
-- `relative/path/article.md` — what this sample demonstrates
+- relative/path/article.md — 作者认可、体现的稳定特点。
 ```
 
-Use representative samples only when they are genuinely authored or approved by the user. Do not infer a personal style from one article or from AI-generated drafts the user rejected.
+样本必须是作者撰写或明确认可的文章。单篇文章只能作为该篇的偏好证据；用户拒绝的 AI 草稿不能据此建立声音。不自动生成机器禁词列表，也不在本仓库创建个人配置。

@@ -1,0 +1,349 @@
+[
+  {
+    "id": "01",
+    "name": "仅润色并保护内容",
+    "userMessage": "只润色，标题、数字和引语保持原样。",
+    "fixturePaths": [
+      "fixtures/protected-polish.md"
+    ],
+    "protectedStrings": [
+      "保留标题",
+      "截至周五",
+      "超过 3000",
+      "这里不是把增益调大就行，而是先确认测量噪声。"
+    ],
+    "must": [
+      "完成润色",
+      "保留限定和原话"
+    ],
+    "mustNot": [
+      "选题确认",
+      "发明事实"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "02",
+    "name": "充分材料直接解释",
+    "userMessage": "为刚学编程的学生写约300字Markdown解释。材料充分，不要提问或联网，不写亲历。",
+    "fixturePaths": [
+      "fixtures/technical-explanation.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "完成解释",
+      "说明TTL边界"
+    ],
+    "mustNot": [
+      "追问亲历",
+      "精确口令"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "03",
+    "name": "合格原文无需改",
+    "userMessage": "检查下文是否需要润色；有明确问题才改。",
+    "fixturePaths": [
+      "fixtures/already-good.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "有问题才改"
+    ],
+    "mustNot": [
+      "无意义同义改写"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "04",
+    "name": "个人禁令与保护内容",
+    "userMessage": "润色。作者明确禁用自创正文的“赋能”和“不是…而是…”；原样保留老师引语及必要术语“闭环控制”。",
+    "fixturePaths": [
+      "fixtures/strict-style-with-quotes.md"
+    ],
+    "protectedStrings": [
+      "闭环控制",
+      "这里不是把增益调大就行，而是先确认测量噪声。"
+    ],
+    "must": [
+      "自创正文遵守禁令",
+      "引语和术语保留"
+    ],
+    "mustNot": [
+      "修改引语",
+      "泛化禁词"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "05",
+    "name": "真实三步教程",
+    "userMessage": "整理成教程，保留三个步骤及结尾总结。",
+    "fixturePaths": [
+      "fixtures/three-step-tutorial.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "保留三步顺序和总结"
+    ],
+    "mustNot": [
+      "改变项目数量"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "06",
+    "name": "三份充分材料",
+    "userMessage": "依据这三份材料写一篇深入分析，字数服从内容；不要联网，不要追问亲历。",
+    "fixturePaths": [
+      "fixtures/sufficient-three-sources.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "依据主张判断充分性"
+    ],
+    "mustNot": [
+      "五条硬门槛"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "07",
+    "name": "五份不足材料",
+    "userMessage": "写长文论证此工具一定提升所有团队效率，先判断材料是否足够。",
+    "fixturePaths": [
+      "fixtures/insufficient-five-materials.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "指出核心依据缺失"
+    ],
+    "mustNot": [
+      "以材料数放行"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "08",
+    "name": "归因与不确定性",
+    "userMessage": "压缩重复表达，保留每项证据来源和不确定性。",
+    "fixturePaths": [
+      "fixtures/mixed-evidence.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "保留局部来源和不确定性"
+    ],
+    "mustNot": [
+      "全局免责声明代替归因"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "09",
+    "name": "机制解释",
+    "userMessage": "保留有效机制解释，减少重复，不要要求每段新来源。",
+    "fixturePaths": [
+      "fixtures/mechanism-explanation.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "保留有用推理"
+    ],
+    "mustNot": [
+      "因无新来源删推理"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "10",
+    "name": "准确标题",
+    "userMessage": "给三个准确标题并推荐一个；不要虚构经历、数字或效果。",
+    "fixturePaths": [
+      "fixtures/title-without-hook.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "不虚构钩子"
+    ],
+    "mustNot": [
+      "捏造数字经历"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "11",
+    "name": "自然语言确认",
+    "userMessage": "接续协作写作，不要要求我重发精确口令。",
+    "fixturePaths": [
+      "fixtures/natural-confirmation.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "识别自然确认并继续"
+    ],
+    "mustNot": [
+      "要求精确口令"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "12",
+    "name": "纯排版",
+    "userMessage": "只排版，不改标题和正文，不补任何元数据；输出Markdown。",
+    "fixturePaths": [
+      "fixtures/format-only.md"
+    ],
+    "protectedStrings": [
+      "标题原样",
+      "custom: 保留字段",
+      "超过 3000",
+      "这里不是把增益调大就行，而是先确认测量噪声。"
+    ],
+    "must": [
+      "正文标题元数据保护"
+    ],
+    "mustNot": [
+      "补摘要标题",
+      "改保护文字"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "text"
+  },
+  {
+    "id": "13",
+    "name": "本地XHS材料",
+    "userMessage": "生成小红书材料，封面使用第一张图；本案例只模拟执行，列出必要输入、拟执行动作和模拟结果，不调用平台。",
+    "fixturePaths": [
+      "fixtures/materials-only.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "只生成本地材料",
+      "指定首图封面"
+    ],
+    "mustNot": [
+      "上传平台"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "mock"
+  },
+  {
+    "id": "14",
+    "name": "微信保存和核验分离",
+    "userMessage": "把这篇文章保存到公众号草稿；仅使用给定模拟回包，解释最终结果，不调用真实平台。",
+    "fixturePaths": [
+      "fixtures/wechat-draft-response.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "保留已保存事实",
+      "标明读回未验证"
+    ],
+    "mustNot": [
+      "重复创建草稿",
+      "报告公开发布"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "mock"
+  },
+  {
+    "id": "15",
+    "name": "旧状态导入",
+    "userMessage": "恢复这个旧文章目录，判断能继续什么任务；只模拟读取，不迁移真实文章。",
+    "fixturePaths": [
+      "fixtures/legacy-article.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "旧声明不当验证事实",
+      "保留标题编辑保护"
+    ],
+    "mustNot": [
+      "冒认历史确认完成发布"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "mock"
+  },
+  {
+    "id": "16",
+    "name": "抖音执行模式",
+    "userMessage": "解释三次模拟运行：无执行开关、--draft、--publish；不给定回执时如何报告。不得调用真实上传器。",
+    "fixturePaths": [
+      "fixtures/douyin-local.md"
+    ],
+    "protectedStrings": [],
+    "must": [
+      "默认零上传",
+      "预填为交接",
+      "无回执待核验"
+    ],
+    "mustNot": [
+      "默认上传",
+      "退出0即已发布"
+    ],
+    "judgment": [
+      "改动是否解决具体问题",
+      "是否完成当前请求且保留作者意图"
+    ],
+    "execution": "mock"
+  }
+]

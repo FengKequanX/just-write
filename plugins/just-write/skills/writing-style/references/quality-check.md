@@ -1,109 +1,69 @@
-# Seven-Pass Revision and Four-Layer Writing Audit
+# 七遍修稿与四层验收
 
-Revise in order. Save prohibition lists for the fifth pass: first rescue the person and material, then clean the sentences. After all seven passes, audit from objective failures to subjective voice. A later layer cannot compensate for a failure in an earlier one.
+长文初稿或主要结构重写使用完整七遍；轻润色与短文只检查当前问题相关项。事实保护和明确编辑范围贯穿全过程，句式清单后置。四层验收检查最终结果，不再重复生成一次全文修稿。
 
-## Seven revision passes
+## 七遍修稿
 
-### 1. Identify who is speaking
+### 1. 说话位置
 
-- Mark paragraphs that another model could have written unchanged.
-- Repair them with information provenance, the author's choice of evidence, and concrete material. Delete them when there is nothing real to add.
-- Do not add “我觉得”, “说真的”, or decorative first person to hide an anonymous voice. Voice comes from selection and position.
+检查信息来路、作者取舍及立场是否清楚。根据材料补充必要关系，不能用装饰性第一人称制造声音。概念解释、报道、营销或教学姿态由当前任务与作者画像决定，不统一强制“观察者”。
 
-### 2. Check whether the article moves forward
+### 2. 内容推进
 
-- Give every paragraph one internal function: action, fact, explanation, example, question, judgment, background, or emotion.
-- Ask what each following paragraph adds. Merge or delete a paragraph that merely rephrases the one before it.
-- Internally name one material source for every nonfiction paragraph. Delete a paragraph whose only source is “further explanation” or “a possible effect”.
-- Run the compression test. If removing one third leaves the facts, actions, judgments, and reading experience almost unchanged, keep the shorter version. Never preserve padding for a target word count.
+判断段落作用：事实、解释、例子、动作、问题、判断或必要背景。合并没有推进的重复。同一依据可以支持多段有效解释，检查推理有无新增未经支持的前提；不因段落缺少新来源而删除。
 
-### 3. Remove performative Chinese
+试删冗余，看是否仍保留事实、动作、判断和理解链。不为达字数保留填充，也不强制删固定比例。
 
-- Delete most screenshot-ready “deep” lines that add no fact, explanation, or earned emotion in context. If consecutive paragraphs end in short judgments, keep only the one with the strongest material.
-- Remove unsourced exact times, weather, expressions, room details, props, and quotations from nonfiction.
-- Remove fake forum speech, rows of abstract nouns, and metaphors that keep changing worlds.
-- When three metaphor fields appear close together, restore all of them to their literal meaning first.
+### 3. 表演性表达
 
-### 4. Listen to the Chinese
+删除没有作用的抬高、抽象口号、假口语与无依据细节。保留有材料支撑的短句、准确比喻和作者有意的节奏。修辞混杂影响理解时恢复本义，不按“出现三个比喻”机械处理。
 
-- Put the actor and action early. Rework “……的，是……”, “真正让……的”, and long sentences carrying several “的”.
-- Check what each sentence hands to the next. Omit a repeated subject when the reference is clear; write the name again when two people are present.
-- Read aloud for the weight of pauses. Merge short sentences that knock like a drum and split a long sentence only where one thought has landed.
-- After an action, object, or exact words already convey emotion, try deleting the explanation that follows.
+### 4. 中文与节奏
 
-### 5. Clear prohibited patterns
+检查读者能否尽早知道谁做了什么。复杂句可以完整保留，绕句按理解需要拆分；主语明确时不重复，指代含混时补回。长短句由意思决定，不为变化刻意打断。情绪已由材料传达时可以省重复解释。
 
-- Load `humanizer-zh` only now and apply its hard prohibitions one by one.
-- Run `bun <humanizer-zh>/scripts/check-prose.ts <draft.md>` and revise until all hard failures are zero.
-- Treat warnings as prompts for human judgment. Dashes in body prose are hard failures by default; colon warnings also become failures under `--strict`.
+### 5. 局部表达检查
 
-### 6. Verify reality
-
-- Recheck time, numbers, identities, quotations, causality, and every first-person action. This pass maps to L1 and L3 below.
-- Repeated “公开资料显示” or “目前无法确认” means verification notes leaked into the body. Move the notes backstage and state a material boundary once.
-- Do not add “可能” or “或许” to every sentence. Repeated hedging makes the author disappear.
-
-### 7. Test the ending
-
-- Delete each of the last two paragraphs in turn and reread. If the article gains force, end earlier.
-- Delete a final paragraph that merely summarizes the article.
-- Search for “时代、文明、未来、世界、历史、所有人”. If the body has not continuously worked at that scale, return to a concrete fact, action, or present judgment.
-
-After the seven passes, run the existing four layers as the final acceptance check.
-
-## L1 — Integrity and hard failures
-
-- Are all quotations, data, release states, dates, and product names traceable?
-- Does any sentence present inference, vendor claims, or third-party testing as established fact?
-- Does the draft invent first-hand experience, emotion, a user story, or an unnamed authority?
-- Did internal revision notes, model disclaimers, or prompt language leak into the article?
-- Are there promotional clichés, artificial urgency, or claims stronger than the evidence?
-
-Pass only when every material problem is fixed or explicitly marked unresolved.
-
-## L2 — Structure and rhythm
-
-- Does the opening begin with something concrete and create the article's main question?
-- Does each section advance that question rather than merely add information?
-- Are detours followed by a clear return to the main line?
-- Do paragraph lengths and sentence shapes vary without mechanical short-paragraph quotas?
-- Are headings and lists used according to the archetype and reading task?
-- Does the ending close the argument or return to the opening instead of adding a generic summary?
-
-## L3 — Evidence and content quality
-
-- Does every core judgment have evidence, direct observation, or an explicitly labeled inference?
-- Are official claims distinguished from independent tests and the author's own experience?
-- Are limitations placed near the claims they constrain?
-- Is the strongest reasonable counter-position represented fairly?
-- Does the article translate the topic into a consequence for its named reader?
-- Does the selected archetype meet the required-material checklist?
-
-## L4 — Author voice and reader flow
-
-- Could this article plausibly come from the author profile and representative samples?
-- Is the posture a thoughtful observer with a judgment, rather than a reporter, marketer, or lecturer?
-- Are first-person passages specific and true rather than decorative?
-- Are memorable short lines earned by prior evidence?
-- Does any paragraph break the reader's attention because it is abstract, repetitive, or over-explained?
-- Is uncertainty expressed as part of the judgment rather than as empty hedging?
-
-## Compact report
+需要时加载 `humanizer-zh`，按其分类问题表检查具体片段。已保存长稿可运行：
 
 ```text
-Style audit: PASS / REVISE
-L1 Integrity: pass / issue
-L2 Structure: pass / issue
-L3 Evidence: pass / issue
-L4 Voice: pass / issue
-Priority fixes:
-1. <specific paragraph and action>
-2. <specific paragraph and action>
-3. <specific paragraph and action>
+bun <humanizer-zh目录>/scripts/check-prose.ts <稿件.md> [--rules <作者规则.json>] [--exemptions <单次例外.json>]
 ```
 
-List no more than three priority fixes. Prefer a concrete edit over a style score.
+通用提示由语境判断，不要求清零。明确作者禁令的未豁免命中必须处理；真实引语、术语和保留片段按检查器配置说明登记。没有显式禁令时，破折号、三项和对比句不构成自动失败。
+
+### 6. 内容保真
+
+复核时间、数量限定、来源、身份、因果、原话及第一人称行为。公开资料、厂商声称和亲测结果不能互换。必要的来源与不确定性放在相关判断处；多个结论的范围不同，可以各自交代。只删空泛防御，不删改变理解的限定。
+
+### 7. 结尾
+
+检查结尾是否完成当前阅读任务：收束判断、返回问题、总结步骤或给合理下一步。重复且无作用才删。教程总结可以降低操作成本；文章没有支持的大尺度升华不要新增。
+
+## 四层最终验收
+
+| 层 | 检查 |
+|---|---|
+| L1 内容与任务边界 | 引语、数字、来源、因果、经历及指定保护项准确；无编造；明确作者规则已处理 |
+| L2 结构与阅读 | 主线能读懂；段落有推进；标题、列表、节奏与文类及当前任务相称 |
+| L3 证据与推理 | 核心主张有相称支持；证据身份、推断和限制清楚；没有扩大测试或案例范围 |
+| L4 作者声音 | 符合认可画像及样本；术语、原话和有意节奏保留；没有被通用规则磨平 |
+
+事实或保护项错误不能用更好听的表达补偿。四层不是模型自评去 AI 分数；未解决的实质问题须明确说明。
+
+## 交付方式
+
+写稿与编辑任务交付结果，说明最重要的一至三项改动即可。审阅任务列具体片段、问题及处理建议，可以用以下简表；不强制每次展示：
+
+```text
+审阅结论：可用／需修改
+内容与边界：<具体结论>
+结构与阅读：<具体结论>
+证据与推理：<具体结论>
+作者声音：<具体结论>
+优先修改：<位置、理由和动作>
+```
 
 ---
 
-Adapted from KKKKhazix/human-writing (MIT), especially `references/revision.md` and `references/reality.md`.
+修稿时序参考 KKKKhazix/human-writing（MIT），移除机械材料、词形和姿态门槛。

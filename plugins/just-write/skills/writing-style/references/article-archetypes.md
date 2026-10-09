@@ -1,58 +1,31 @@
-# Article Archetypes
+# 文章文类与材料需要
 
-Choose one primary archetype. A secondary archetype may contribute evidence, but must not replace the main narrative halfway through.
+需要确定长文主线或判断证据缺口时读取。选最接近的文类，允许混合；不必填满所有栏目。
 
-## Personal reflection
+## 个人反思
 
-Use when a real event changed or exposed the author's thinking.
+适用于真实经历带来判断变化。写清实际经历、当时理解与现在的判断；存在未解决部分时如实保留。可以从事件、处境或当前判断开始，不必把经历加工成戏剧冲突。结尾可以是当前选择，不要求普遍人生启示。
 
-- Start from the triggering event or contrast.
-- Move from personal experience to a broader question.
-- Admit unresolved uncertainty instead of converting reflection into advice too early.
-- End with the author's present decision, not a universal life lesson.
+## 实际产品测试
 
-Required material: a real experience, the before/after change in judgment, and the unresolved part.
+适用于作者确实运行过工具、模型或流程。说明目标、环境和可复现条件，用代表性输入输出解释结果。成功和失败按照现有记录呈现，不为了平衡发明失败。限定样本能支持的范围，并区分厂商指标、第三方测试和作者观察。
 
-## Hands-on product test
+## 事件或新闻分析
 
-Use when the author actually tried a model, tool, workflow, or feature.
+适用于已记录事件值得解释。依据一手来源重建相关部分，区分事件日期、报道日期和后续解释。事件顺序服务中心问题，不必写完整编年史。来源不足处只限制相关判断；归因贴近具体主张。
 
-- State the test goal and environment.
-- Show representative successes and failures in sequence.
-- Distinguish benchmark claims from observed behavior.
-- Explain what the result changes for a real user.
+## 产品比较或趋势观察
 
-Required material: test conditions, direct outputs or screenshots, failure cases, and comparison criteria. Never imply first-hand testing when only third-party reports exist.
+适用于多个产品或现象在同一问题上可比。使用相称事实、条件和可用阶段，避免把发布愿景当成可用能力。比较维度由读者决策确定，趋势判断不能扩大少量案例的证明力。
 
-## Event or news analysis
+## 工具或方法分享
 
-Use when one documented event reveals a capability, risk, or product shift.
+适用于读者需要完成某项操作。先说明问题和适用条件，再按依赖安排动作。真实结果如实呈现，未亲测的流程说明依据；必要的失败恢复和操作总结可以保留。没有作者经历时不编造“我是怎样发现的”。
 
-- Lead with the event and the detail that changes its meaning.
-- Reconstruct what happened from primary sources.
-- Identify source limitations before interpreting the event.
-- Move from event mechanics to a concrete system or user implication.
+## 概念解释与技术科普
 
-Required material: primary source, event chronology, uncertainty, and a defensible judgment.
+适用于读者需要理解定义、机制或边界。材料可以是稳定定义、已知机制、来源与清楚标注的假设例子。直接回答问题，逐步解释关键关系，保留必要术语。无需个人经历、情绪节点或事件链。同一依据支持多段机制推理是合理结构。
 
-## Product comparison or trend observation
+---
 
-Use when two or more releases are meaningful together.
-
-- Give each product enough context to remain fair.
-- Compare on one stable question, not a feature inventory.
-- Separate vendor positioning from actual availability.
-- End with the emerging user or developer choice.
-
-Required material: comparable facts, stage of availability, meaningful differences, and why the grouping matters.
-
-## Tool or method sharing
-
-Use when readers should be able to act after reading.
-
-- Begin with the real problem that produced the method.
-- Explain the method through a concrete use.
-- Give an action the reader can perform now.
-- State learning cost, failure modes, and where the method does not apply.
-
-Required material: a real use case, steps, result, limits, and recovery advice.
+部分文类指导参考 KKKKhazix/human-writing（MIT），增加概念解释场景。

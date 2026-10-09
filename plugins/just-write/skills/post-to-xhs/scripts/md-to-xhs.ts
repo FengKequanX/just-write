@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
+import { createHash } from 'node:crypto';
+import { operationResult } from '../../../lib/platform-result';
 import { marked, type Token } from 'marked';
 import { loadXhsConfig, validateXhsOptions, type XhsConfig } from './xhs-config';
 import { inspectReadingHtml, normalizeReadingBreaks, preserveExplicitBreaks } from '../../../lib/reading-format';
@@ -1526,8 +1528,9 @@ export function generateCaption(
   author: string,
   fm: Frontmatter,
   topics: string[],
+  captionBody?: string,
 ): string {
-  const description = fm.description || fm.summary || '';
+  const description = captionBody !== undefined ? captionBody : fm.description || fm.summary || '';
   const tagStr = topics.map((topic) => `#${topic}`).join(' ');
 
   return [
@@ -1700,6 +1703,7 @@ export async function render(
   aspect: string,
   author: string,
   topicTags: string,
+  captionBody?: string,
 ): Promise<RenderResult> {
   const size = ASPECT_SIZES[aspect] || ASPECT_SIZES[DEFAULT_ASPECT];
   const absMarkdown = path.resolve(markdownPath);
@@ -1818,7 +1822,7 @@ export async function render(
     }
   }
 
-  const caption = generateCaption(title, resolvedAuthor, fm, topics);
+  const caption = generateCaption(title, resolvedAuthor, fm, topics, captionBody);
   const captionPath = path.join(outDir, 'caption.md');
   fs.writeFileSync(captionPath, caption, 'utf-8');
   const warnings = inspectReadingHtml(pages.filter((page) => page.type === 'content').map((page) => page.bodyHtml).join('\n'));
@@ -1875,28 +1879,30 @@ export function commitGeneratedOutput(
 function printUsage(): never {
   console.log(`Markdown → 小红书轮播图
 
-Usage:
+用法：
   bun md-to-xhs.ts <markdown-file> [options]
 
-Options:
-  --out <dir>       Output directory (default: <article-dir>/xhs/)
-  --theme <name>    Theme name (default: default)
-  --aspect <ratio>  Aspect ratio: 3:4 | 9:16 | 1:1 | 4:3 (default: 3:4)
-  --author <name>   Author name
-  --tags <tags>     3-5 article-specific topic tags, comma-separated
-  --help            Show this help
+参数：
+  --out <dir>       输出目录（默认：<article-dir>/xhs/）
+  --theme <name>    主题（默认：default）
+  --aspect <ratio>  比例：3:4 | 9:16 | 1:1 | 4:3（默认：3:4）
+  --author <name>   作者名
+  --tags <tags>     本篇准确话题，至多五个，用逗号分隔；不要求凑满
+  --caption-body-file <path> 独立 UTF-8 配文正文；显式空文件优先于摘要
+  --json           仅输出结构结果，日志写 stderr，可供工作流登记
+  --help           显示帮助
 
-Environment:
-  CHROME_PATH       Custom Chrome executable path
+环境变量：
+  CHROME_PATH      Chrome 可执行文件路径
 
-Output:
+输出：
   <out>/01-cover.png
   <out>/02-content-<slug>.png
   <out>/caption.md
   <out>/preview.html          整组总览及 360/390/430px 手机预览
   <out>/render-report.json    文字、图片顺序、分段覆盖与布局检查
 
-Example:
+示例：
   bun md-to-xhs.ts article.md --out ./xhs-images --author 作者名
 `);
   process.exit(0);
@@ -1909,6 +1915,8 @@ export interface XhsCliOptions {
   aspect: string;
   author: string;
   tags: string;
+  captionBodyFile?: string;
+  json?: boolean;
 }
 
 export function parseXhsArgs(args: string[], defaults: XhsConfig): XhsCliOptions {
@@ -1920,81 +1928,95 @@ export function parseXhsArgs(args: string[], defaults: XhsConfig): XhsCliOptions
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
-    if (arg === '--out' && args[i + 1]) options.outDir = args[++i];
+    if (['--out', '--theme', '--aspect', '--author', '--tags', '--caption-body-file'].includes(arg) &&
+      (args[i + 1] === undefined || args[i + 1]!.startsWith('--'))) throw new Error(`参数缺少值：${arg}`);
+    if (arg === '--json') options.json = true;
+    else if (arg === '--out' && args[i + 1]) options.outDir = args[++i];
     else if (arg === '--theme' && args[i + 1]) options.theme = args[++i]!;
     else if (arg === '--aspect' && args[i + 1]) options.aspect = args[++i]!;
     else if (arg === '--author' && args[i + 1]) options.author = args[++i]!;
     else if (arg === '--tags' && args[i + 1]) options.tags = args[++i]!;
+    else if (arg === '--caption-body-file' && args[i + 1]) options.captionBodyFile = args[++i]!;
     else if (!arg.startsWith('-') && !options.markdownPath) options.markdownPath = arg;
-    else throw new Error(`Unknown or incomplete argument: ${arg}`);
+    else throw new Error(`未知或不完整参数：${arg}`);
   }
   return options;
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    printUsage();
-  }
-
-  const loadedConfig = loadXhsConfig();
-  const options = parseXhsArgs(args, loadedConfig.config);
-  let { markdownPath, outDir } = options;
-
-  if (!markdownPath) {
-    console.error('Error: Markdown file path is required');
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(markdownPath)) {
-    console.error(`Error: File not found: ${markdownPath}`);
-    process.exit(1);
-  }
-
-  if (!outDir) {
-    outDir = path.join(path.dirname(path.resolve(markdownPath)), 'xhs');
-  }
-
-  const themesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'themes');
-  validateXhsOptions(options.theme, options.aspect, themesDir);
-
-  console.log(`[md-to-xhs] Rendering: ${markdownPath}`);
-  console.log(`[md-to-xhs] Config: ${loadedConfig.source}`);
-  console.log(`[md-to-xhs] Theme: ${options.theme} · Aspect: ${options.aspect} · Output: ${outDir}`);
-
-  const stagingDir = `${path.resolve(outDir)}.tmp-${process.pid}-${Date.now()}`;
-  fs.rmSync(stagingDir, { recursive: true, force: true });
-  let result: RenderResult;
+export async function main(args = process.argv.slice(2), dependencies: { loadConfig?: typeof loadXhsConfig; render?: typeof render } = {}): Promise<number> {
   try {
-    const staged = await render(
-      markdownPath,
-      stagingDir,
-      options.theme,
-      options.aspect,
-      options.author,
-      options.tags,
-    );
-    result = commitGeneratedOutput(staged, stagingDir, path.resolve(outDir));
-  } finally {
-    fs.rmSync(stagingDir, { recursive: true, force: true });
-  }
+    if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+      printUsage();
+    }
 
-  console.log(`\n[md-to-xhs] Done! ${result.totalPages} pages generated:`);
-  for (const img of result.images) {
-    console.log(`  → ${path.basename(img)}`);
+    const loadedConfig = (dependencies.loadConfig ?? loadXhsConfig)();
+    const options = parseXhsArgs(args, loadedConfig.config);
+    let { markdownPath, outDir } = options;
+
+    if (!markdownPath) {
+      throw new Error('需要 Markdown 文件路径');
+    }
+
+    if (!fs.existsSync(markdownPath)) {
+      throw new Error(`文件不存在：${markdownPath}`);
+    }
+
+    if (!outDir) {
+      outDir = path.join(path.dirname(path.resolve(markdownPath)), 'xhs');
+    }
+
+    const themesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'themes');
+    validateXhsOptions(options.theme, options.aspect, themesDir);
+
+    const log = console.error;
+    log(`[md-to-xhs] 渲染：${markdownPath}`);
+    log(`[md-to-xhs] 配置：${loadedConfig.source}`);
+    log(`[md-to-xhs] 主题：${options.theme} · 比例：${options.aspect} · 目录：${outDir}`);
+
+    const stagingDir = `${path.resolve(outDir)}.tmp-${process.pid}-${Date.now()}`;
+    const captionBody = options.captionBodyFile !== undefined ? fs.readFileSync(path.resolve(options.captionBodyFile), 'utf8') : undefined;
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    let result: RenderResult;
+    try {
+      const staged = await (dependencies.render ?? render)(
+        markdownPath,
+        stagingDir,
+        options.theme,
+        options.aspect,
+        options.author,
+        options.tags,
+        captionBody,
+      );
+      result = commitGeneratedOutput(staged, stagingDir, path.resolve(outDir));
+    } finally {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    }
+
+    log(`\n[md-to-xhs] 已生成 ${result.totalPages} 张图片：`);
+    for (const img of result.images) {
+      log(`  → ${path.basename(img)}`);
+    }
+    log(`  → caption.md`);
+    log(`  → preview.html`);
+    log(`  → render-report.json`);
+    const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
+    for (const warning of report.warnings) console.warn(`[阅读检查] ${warning}`);
+    const sourceDigest = createHash('sha256').update(fs.readFileSync(markdownPath)).digest('hex');
+    const inputDigest = createHash('sha256').update(JSON.stringify({ sourceDigest, captionBody, theme: options.theme, aspect: options.aspect, author: options.author, tags: options.tags })).digest('hex');
+    const outcome = operationResult('xhs', 'generate', 'generated', { inputDigest,
+      inputSummary: { markdownSha256: sourceDigest, imageCount: result.totalPages, title: result.title, captionPath: result.captionPath },
+      message: '本地文件生成完成；实际视觉检查由技能交付流程核对',
+    });
+    console.log(JSON.stringify({ ...result, result: outcome }, null, 2));
+    return 0;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[md-to-xhs] ' + message);
+    if (args.includes('--json')) console.log(JSON.stringify({ result: operationResult('xhs', 'generate', 'failed', { message }) }));
+    return error instanceof CarouselLimitError ? 1 : 2;
   }
-  console.log(`  → caption.md`);
-  console.log(`  → preview.html`);
-  console.log(`  → render-report.json`);
-  const report = JSON.parse(fs.readFileSync(result.reportPath!, 'utf8')) as CarouselReport;
-  for (const warning of report.warnings) console.warn(`[阅读检查] ${warning}`);
-  console.log(`\nOutput JSON:`);
-  console.log(JSON.stringify(result, null, 2));
 }
 
 if (import.meta.main) {
-  await main().catch((error: unknown) => {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  });
+  process.exitCode = await main();
 }

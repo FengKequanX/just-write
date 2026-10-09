@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "forbiddenTerms": ["赋能"],
+  "forbiddenPatterns": ["pivot.not_but"],
+  "forbiddenPunctuation": ["—"],
+  "allowedTerms": ["闭环控制"],
+  "disabledSignals": []
+}

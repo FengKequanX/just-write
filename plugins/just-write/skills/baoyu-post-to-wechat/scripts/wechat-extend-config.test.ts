@@ -5,7 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import test, { type TestContext } from "node:test";
 
-import { loadCredentials } from "./wechat-extend-config.ts";
+import { loadCredentials, resolveAccount } from "./wechat-extend-config.ts";
 
 function useCwd(t: TestContext, cwd: string): void {
   const previous = process.cwd();
@@ -95,6 +95,29 @@ test("loadCredentials selects the first complete source without mixing values ac
   assert.deepEqual(credentials.skippedSources, [
     "process.env missing WECHAT_APP_ID",
   ]);
+});
+
+test('账号选择拒绝未知、重复、多个默认和未明确目标', () => {
+  assert.throws(() => resolveAccount({}, 'missing'), /未知微信账号/);
+  assert.throws(() => resolveAccount({ accounts: [{ name: '甲', alias: 'a' }, { name: '乙', alias: 'a' }] }), /重复/);
+  assert.throws(() => resolveAccount({ accounts: [{ name: '甲', alias: 'a', default: true }, { name: '乙', alias: 'b', default: true }] }), /多个默认/);
+  const config = { default_theme: 'default', accounts: [{ name: '甲', alias: 'a', default_theme: 'grace' }, { name: '乙', alias: 'b' }] };
+  assert.throws(() => resolveAccount(config), /明确选择/);
+  assert.equal(resolveAccount(config, undefined, { offline: true }).source, 'offline_unselected');
+  assert.equal(resolveAccount(config, 'a').default_theme, 'grace');
+  assert.equal(resolveAccount({ ...config, chrome_profile_path: 'global-profile' }, 'a').chrome_profile_path, undefined);
+  assert.equal(resolveAccount({}).source, 'legacy_single_account');
+});
+
+test('已选账号缺凭证时不会回退全局完整凭证', async (t) => {
+  const cwdRoot = await makeTempDir('wechat-alias-cwd-');
+  useCwd(t, cwdRoot);
+  useWechatEnv(t, { WECHAT_APP_ID: 'global-id', WECHAT_APP_SECRET: 'global-secret' });
+  assert.throws(() => loadCredentials(resolveAccount({ accounts: [{ name: '甲', alias: 'test_no_fallback' }] })), /Missing WECHAT_APP_ID/);
+  const selected = resolveAccount({ accounts: [{ name: '甲', alias: 'test_no_fallback', app_id: 'selected-id', app_secret: 'selected-secret' }] });
+  const credentials = loadCredentials(selected);
+  assert.equal(credentials.appId, 'selected-id');
+  assert.equal(credentials.appSecret, 'selected-secret');
 });
 
 test("loadCredentials prefers a complete process.env pair over lower-priority files", async (t) => {

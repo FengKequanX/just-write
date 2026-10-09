@@ -1,559 +1,64 @@
 ---
 name: baoyu-post-to-wechat
-description: Posts content to WeChat Official Account (微信公众号) via API or Chrome CDP. Supports article posting (文章) with HTML, markdown, or plain text input, and image-text posting (贴图, formerly 图文) with multiple images. Markdown article workflows default to converting ordinary external links into bottom citations for WeChat-friendly output. Use when user mentions "发布公众号", "post to wechat", "微信公众号", or "贴图/图文/文章".
-metadata:
-  version: 1.56.1
-  openclaw:
-    homepage: https://github.com/JimLiu/baoyu-skills#baoyu-post-to-wechat
-    requires:
-      anyBins:
-        - bun
-        - npx
+description: 将已有 Markdown、HTML 或贴图内容准备到微信公众平台并按授权保存草稿，核对账号、素材和实际结果。支持离线预览、API 草稿及浏览器预填；保存草稿与公开发布分开报告。
 ---
 
-# Post to WeChat Official Account
+# 微信草稿与预览
 
-## Language
+处理已有内容，不默认重写文章或标题。用户已经授权保存到指定账号草稿箱时直接推进；只有目标、操作或内容有实质歧义时确认，不要求固定口令。事实和指定保护项遵循 [共用内容契约](../just-write/references/content-contract.md)。
 
-**Match user's language**: Respond in the same language the user uses. If user writes in Chinese, respond in Chinese. If user writes in English, respond in English.
+## 选择当前动作
 
-## Script Directory
+| 动作 | 入口 | 默认 |
+|---|---|---|
+| 离线手机预览 | `scripts/wechat-preview.ts` | 不需要账号或凭证，不调用 API |
+| API 保存文章／图文草稿 | `scripts/wechat-api.ts` | 为兼容默认保存草稿；仅已有明确草稿授权时执行 |
+| 浏览器文章预填 | `scripts/wechat-article.ts` | 只预填；`--save-draft` 才保存 |
+| 浏览器贴图预填 | `scripts/wechat-browser.ts` | 只预填；`--save-draft` 才保存 |
 
-**Agent Execution**: Determine this SKILL.md directory as `{baseDir}`, then use `{baseDir}/scripts/<name>.ts`. Resolve `${BUN_X}` runtime: if `bun` installed → `bun`; if `npx` available → `npx -y bun`; else suggest installing bun.
+保存草稿不代表公开发布。浏览器预填本身也是外部操作，必须属于当前请求。API `--dry-run` 为离线解析预览；执行草稿保存时显式传 `--save-draft`，兼容默认不能当作授权来源。
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/wechat-browser.ts` | Image-text posts (图文) |
-| `scripts/wechat-article.ts` | Article posting via browser (文章) |
-| `scripts/wechat-api.ts` | Article posting via API (文章) |
-| `scripts/md-to-wechat.ts` | Markdown → WeChat-ready HTML with image placeholders |
-| `scripts/check-permissions.ts` | Verify environment & permissions |
+- 初次配置或缺少当前动作的必需项：读 [首次设置](references/config/first-time-setup.md)。无 EXTEND 不强迫设置，离线预览不需要凭证。
+- 长文 API／浏览器操作：读 [文章处理](references/article-posting.md)。
+- 多图短文／贴图：读 [贴图处理](references/image-text-posting.md)。
+- 登录、白名单、保存或核验问题：读 [错误恢复](references/troubleshooting.md)。
 
-## Preferences (EXTEND.md)
+## 核对输入与账号
 
-Check EXTEND.md existence (priority order):
+读取首个存在的 EXTEND：项目 `.baoyu-skills/baoyu-post-to-wechat/EXTEND.md` → XDG（未设置时 `~/.config`）→ 用户 `~/.baoyu-skills/baoyu-post-to-wechat/EXTEND.md`。
 
-```bash
-# macOS, Linux, WSL, Git Bash
-test -f .baoyu-skills/baoyu-post-to-wechat/EXTEND.md && echo "project"
-test -f "${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/baoyu-post-to-wechat/EXTEND.md" && echo "xdg"
-test -f "$HOME/.baoyu-skills/baoyu-post-to-wechat/EXTEND.md" && echo "user"
+显式 `--account` 必须有效。唯一账号或唯一默认账号可以沿用；实际操作有多个候选且无默认时必须选定。重复别名、多个默认及未知别名报错。无账号列表时兼容 legacy 单账号；离线预览可以不选账号。
+
+已选账号使用本账号的完整凭证来源，不回退另一账号的全局凭证。密码与令牌不回显、不写入产物或状态。浏览器账号采用独立登录配置，并在操作前核对界面目标。
+
+字段优先级为 CLI → frontmatter → 账号默认 → 全局默认 → 程序默认。作者、主题、颜色及评论字段只在适用入口使用，不提前填默认遮盖配置。路由由用户选择或已存在默认决定；未指定时可以优先 API，API 失败不自动切换浏览器。
+
+## 准备与本地阅读检查
+
+唯一现有标题可沿用，用户指定标题原样保留；frontmatter 与 H1 冲突时先解决。摘要从已有字段或正文准确概括，不新增事实，不静默截断。缺字段时按 [元数据准备](../baoyu-format-markdown/references/metadata.md) 处理，保护整稿则使用独立文件或显式参数。
+
+API 文章封面依次取显式 `--cover`、frontmatter 封面字段、`imgs/cover.png`，没有指定封面时才考虑首张正文图。用户指定第一张就使用该张，不能优化替换；不拿 `cover-xhs.png` 代替。正文图片必须完整可用。
+
+新稿或排版有变化时运行：
+
+```text
+bun <本技能目录>/scripts/wechat-preview.ts <稿件.md> --out <预览.html> [--theme <主题>] [--color <颜色>] [--no-cite]
 ```
 
-```powershell
-# PowerShell (Windows)
-if (Test-Path .baoyu-skills/baoyu-post-to-wechat/EXTEND.md) { "project" }
-$xdg = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { "$HOME/.config" }
-if (Test-Path "$xdg/baoyu-skills/baoyu-post-to-wechat/EXTEND.md") { "xdg" }
-if (Test-Path "$HOME/.baoyu-skills/baoyu-post-to-wechat/EXTEND.md") { "user" }
-```
+遵循 [手机阅读规则](../baoyu-format-markdown/references/reading-layout.md)，在 360／390／430px 检查文字、背景、字体、段落、强调、图注及长图可读性。报告 warning 帮助定位，不能授权改写正文。预览不模拟客户端全部过滤，真实草稿仍需读回核对。
 
-┌────────────────────────────────────────────────────────┬───────────────────┐
-│                          Path                          │     Location      │
-├────────────────────────────────────────────────────────┼───────────────────┤
-│ .baoyu-skills/baoyu-post-to-wechat/EXTEND.md           │ Project directory │
-├────────────────────────────────────────────────────────┼───────────────────┤
-│ $HOME/.baoyu-skills/baoyu-post-to-wechat/EXTEND.md     │ User home         │
-└────────────────────────────────────────────────────────┴───────────────────┘
+## 执行与结果
 
-┌───────────┬───────────────────────────────────────────────────────────────────────────┐
-│  Result   │                                  Action                                   │
-├───────────┼───────────────────────────────────────────────────────────────────────────┤
-│ Found     │ Read, parse, apply settings                                               │
-├───────────┼───────────────────────────────────────────────────────────────────────────┤
-│ Not found │ Run first-time setup ([references/config/first-time-setup.md](references/config/first-time-setup.md)) → Save → Continue │
-└───────────┴───────────────────────────────────────────────────────────────────────────┘
+传入 Markdown 让平台脚本完成转换、图片上传和替换，不把本地预览 HTML 当成已完成的发布输入。`--submit` 是浏览器 `--save-draft` 的兼容别名。平台脚本可用 `--json` 提供结构结果，日志写 stderr。
 
-**EXTEND.md Supports**: Default theme | Default color | Default publishing method (api/browser) | Default author | Default open-comment switch | Default fans-only-comment switch | Chrome profile path
+| 结果 | 报告 |
+|---|---|
+| API 有效草稿 ID | 已保存草稿，随后报告读回验证情况 |
+| 浏览器明确保存回执 | 已保存草稿；任意 toast、按钮未找到或等待结束不算成功 |
+| 浏览器仅预填 | 已预填待交接 `manual_handoff` |
+| 保存是否发生无法判断 | `outcome_unknown`，先核对，不重复创建 |
+| 明确拒绝 | `failed`，报告业务错误和当前恢复动作 |
 
-First-time setup: [references/config/first-time-setup.md](references/config/first-time-setup.md)
+读回核对标题、正文语义和图片／封面身份；失败或不一致保留保存事实，分别标记 `unverified / mismatch`。退出码：0 成功，1 明确业务失败，2 参数／运行错误，3 结果或验证待核验。
 
-**Minimum supported keys** (case-insensitive, accept `1/0` or `true/false`):
-
-| Key | Default | Mapping |
-|-----|---------|---------|
-| `default_author` | empty | Fallback for `author` when CLI/frontmatter not provided |
-| `need_open_comment` | `1` | `articles[].need_open_comment` in `draft/add` request |
-| `only_fans_can_comment` | `0` | `articles[].only_fans_can_comment` in `draft/add` request |
-
-**Recommended EXTEND.md example**:
-
-```md
-default_theme: default
-default_color: blue
-default_publish_method: api
-default_author: 宝玉
-need_open_comment: 1
-only_fans_can_comment: 0
-chrome_profile_path: /path/to/chrome/profile
-```
-
-**Theme options**: default, grace, simple, modern
-
-**Color presets**: blue, green, vermilion, yellow, purple, sky, rose, olive, black, gray, pink, red, orange (or hex value)
-
-**Value priority**:
-1. CLI arguments
-2. Frontmatter
-3. EXTEND.md (account-level → global-level)
-4. Skill defaults
-
-## Multi-Account Support
-
-EXTEND.md supports managing multiple WeChat Official Accounts. When `accounts:` block is present, each account can have its own credentials, Chrome profile, and default settings.
-
-**Compatibility rules**:
-
-| Condition | Mode | Behavior |
-|-----------|------|----------|
-| No `accounts` block | Single-account | Current behavior, unchanged |
-| `accounts` with 1 entry | Single-account | Auto-select, no prompt |
-| `accounts` with 2+ entries | Multi-account | Prompt to select before publishing |
-| `accounts` with `default: true` | Multi-account | Pre-select default, user can switch |
-
-**Multi-account EXTEND.md example**:
-
-```md
-default_theme: default
-default_color: blue
-
-accounts:
-  - name: 宝玉的技术分享
-    alias: baoyu
-    default: true
-    default_publish_method: api
-    default_author: 宝玉
-    need_open_comment: 1
-    only_fans_can_comment: 0
-    app_id: your_wechat_app_id
-    app_secret: your_wechat_app_secret
-  - name: AI工具集
-    alias: ai-tools
-    default_publish_method: browser
-    default_author: AI工具集
-    need_open_comment: 1
-    only_fans_can_comment: 0
-```
-
-**Per-account keys** (can be set per-account or globally as fallback):
-`default_publish_method`, `default_author`, `need_open_comment`, `only_fans_can_comment`, `app_id`, `app_secret`, `chrome_profile_path`
-
-**Global-only keys** (always shared across accounts):
-`default_theme`, `default_color`
-
-### Account Selection (Step 0.5)
-
-Insert between Step 0 and Step 1 in the Article Posting Workflow:
-
-```
-if no accounts block:
-    → single-account mode (current behavior)
-elif accounts.length == 1:
-    → auto-select the only account
-elif --account <alias> CLI arg:
-    → select matching account
-elif one account has default: true:
-    → pre-select, show: "Using account: <name> (--account to switch)"
-else:
-    → prompt user:
-      "Multiple WeChat accounts configured:
-       1) <name1> (<alias1>)
-       2) <name2> (<alias2>)
-       Select account [1-N]:"
-```
-
-### Credential Resolution (API Method)
-
-For a selected account with alias `{alias}`:
-
-1. `app_id` / `app_secret` inline in EXTEND.md account block
-2. Env var `WECHAT_{ALIAS}_APP_ID` / `WECHAT_{ALIAS}_APP_SECRET` (alias uppercased, hyphens → underscores)
-3. `.baoyu-skills/.env` with prefixed key `WECHAT_{ALIAS}_APP_ID`
-4. `~/.baoyu-skills/.env` with prefixed key
-5. Fallback to unprefixed `WECHAT_APP_ID` / `WECHAT_APP_SECRET`
-
-**.env multi-account example**:
-
-```bash
-# Account: baoyu
-WECHAT_BAOYU_APP_ID=your_wechat_app_id
-WECHAT_BAOYU_APP_SECRET=your_wechat_app_secret
-
-# Account: ai-tools
-WECHAT_AI_TOOLS_APP_ID=your_ai_tools_wechat_app_id
-WECHAT_AI_TOOLS_APP_SECRET=your_ai_tools_wechat_app_secret
-```
-
-### Chrome Profile (Browser Method)
-
-Each account uses an isolated Chrome profile for independent login sessions:
-
-| Source | Path |
-|--------|------|
-| Account `chrome_profile_path` in EXTEND.md | Use as-is |
-| Auto-generated from alias | `{shared_profile_parent}/wechat-{alias}/` |
-| Single-account fallback | Shared default profile (current behavior) |
-
-### CLI `--account` Argument
-
-All publishing scripts accept `--account <alias>`:
-
-```bash
-${BUN_X} {baseDir}/scripts/wechat-api.ts <file> --theme default --account ai-tools
-${BUN_X} {baseDir}/scripts/wechat-article.ts --markdown <file> --theme default --account baoyu
-${BUN_X} {baseDir}/scripts/wechat-browser.ts --markdown <file> --images ./photos/ --account baoyu
-```
-
-## Pre-flight Check (Optional)
-
-Before first use, suggest running the environment check. User can skip if they prefer.
-
-```bash
-${BUN_X} {baseDir}/scripts/check-permissions.ts
-```
-
-Checks: Chrome, profile isolation, Bun, Accessibility, clipboard, paste keystroke, API credentials, Chrome conflicts.
-
-**If any check fails**, provide fix guidance per item:
-
-| Check | Fix |
-|-------|-----|
-| Chrome | Install Chrome or set `WECHAT_BROWSER_CHROME_PATH` env var |
-| Profile dir | Shared profile at `baoyu-skills/chrome-profile` (see CLAUDE.md Chrome Profile section) |
-| Bun runtime | `brew install oven-sh/bun/bun` (macOS) or `npm install -g bun` |
-| Accessibility (macOS) | System Settings → Privacy & Security → Accessibility → enable terminal app |
-| Clipboard copy | Ensure Swift/AppKit available (macOS Xcode CLI tools: `xcode-select --install`) |
-| Paste keystroke (macOS) | Same as Accessibility fix above |
-| Paste keystroke (Linux) | Install `xdotool` (X11) or `ydotool` (Wayland) |
-| API credentials | Follow guided setup in Step 2, or manually set in `.baoyu-skills/.env` |
-| API IP not whitelisted | Add current IP to WeChat Official Account whitelist at mp.weixin.qq.com → 开发 → 基本配置 → IP白名单 |
-
-## Image-Text Posting (贴图/图文)
-
-**Title limit**: 贴图标题最多 20 个字符（一个英文字母/数字算1字符，一个中文算1字符），超长会被截断或报错。
-
-For short posts with multiple images (up to 9):
-
-```bash
-${BUN_X} {baseDir}/scripts/wechat-browser.ts --markdown article.md --images ./images/
-${BUN_X} {baseDir}/scripts/wechat-browser.ts --title "标题" --content "内容" --image img.png --submit
-```
-
-See [references/image-text-posting.md](references/image-text-posting.md) for details.
-
-## Article Posting Workflow (文章)
-
-Copy this checklist and check off items as you complete them:
-
-```
-Publishing Progress:
-- [ ] Step 0: Load preferences (EXTEND.md)
-- [ ] Step 0.5: Resolve account (multi-account only)
-- [ ] Step 1: Determine input type
-- [ ] Step 2: Select method and configure credentials
-- [ ] Step 3: Resolve theme/color and validate metadata
-- [ ] Step 4: Publish to WeChat
-- [ ] Step 5: Report completion
-```
-
-### Step 0: Load Preferences
-
-Check and load EXTEND.md settings (see Preferences section above).
-
-**CRITICAL**: If not found, complete first-time setup BEFORE any other steps or questions.
-
-Resolve and store these defaults for later steps:
-- `default_theme` (default `default`)
-- `default_color` (omit if not set — theme default applies)
-- `default_author`
-- `need_open_comment` (default `1`)
-- `only_fans_can_comment` (default `0`)
-
-### Step 1: Determine Input Type
-
-| Input Type | Detection | Action |
-|------------|-----------|--------|
-| HTML file | Path ends with `.html`, file exists | Skip to Step 3 |
-| Markdown file | Path ends with `.md`, file exists | Continue to Step 2 |
-| Plain text | Not a file path, or file doesn't exist | Save to markdown, continue to Step 2 |
-
-**Plain Text Handling**:
-
-1. Generate slug from content (first 2-4 meaningful words, kebab-case)
-2. Create directory and save file:
-
-```bash
-mkdir -p "$(pwd)/post-to-wechat/$(date +%Y-%m-%d)"
-# Save content to: post-to-wechat/yyyy-MM-dd/[slug].md
-```
-
-3. Continue processing as markdown file
-
-**Slug Examples**:
-- "Understanding AI Models" → `understanding-ai-models`
-- "人工智能的未来" → `ai-future` (translate to English for slug)
-
-### Step 2: Select Publishing Method and Configure
-
-**Priority: API method first** — `api` is faster and fully automated, so attempt it first unless user explicitly prefers `browser` or EXTEND.md specifies `default_publish_method: browser`.
-
-| Method | Speed | Requirements |
-|--------|-------|--------------|
-| `api` (Recommended) | Fast | API credentials |
-| `browser` | Slow | Chrome, login session |
-
-**If API Selected - Check Credentials**:
-
-```bash
-# macOS, Linux, WSL, Git Bash
-test -f .baoyu-skills/.env && grep -q "WECHAT_APP_ID" .baoyu-skills/.env && echo "project"
-test -f "$HOME/.baoyu-skills/.env" && grep -q "WECHAT_APP_ID" "$HOME/.baoyu-skills/.env" && echo "user"
-```
-
-```powershell
-# PowerShell (Windows)
-if ((Test-Path .baoyu-skills/.env) -and (Select-String -Quiet -Pattern "WECHAT_APP_ID" .baoyu-skills/.env)) { "project" }
-if ((Test-Path "$HOME/.baoyu-skills/.env") -and (Select-String -Quiet -Pattern "WECHAT_APP_ID" "$HOME/.baoyu-skills/.env")) { "user" }
-```
-
-**If Credentials Missing - Guide Setup**:
-
-```
-WeChat API credentials not found.
-
-To obtain credentials:
-1. Visit https://mp.weixin.qq.com
-2. Go to: 开发 → 基本配置
-3. Copy AppID and AppSecret
-
-Where to save?
-A) Project-level: .baoyu-skills/.env (this project only)
-B) User-level: ~/.baoyu-skills/.env (all projects)
-```
-
-After location choice, prompt for values and write to `.env`:
-
-```
-WECHAT_APP_ID=<user_input>
-WECHAT_APP_SECRET=<user_input>
-```
-
-**If API fails due to IP whitelist (error 40164)**:
-
-```
-API发布失败：IP不在白名单内。
-
-当前IP：<显示当前IP>
-请到微信公众平台添加白名单：
-1. 登录 https://mp.weixin.qq.com
-2. 进入：开发 → 基本配置 → IP白名单
-3. 添加当前IP后，重新执行发布命令
-
-添加后重试 API，或选择 browser 方式发布。
-```
-
-**Fallback**: If user declines to add IP or API still fails after whitelist update, fall back to `browser` method with a clear message: "API unavailable — using browser method instead."
-
-### Step 3: Resolve Theme/Color and Validate Metadata
-
-1. **Resolve theme** (first match wins, do NOT ask user if resolved):
-   - CLI `--theme` argument
-   - EXTEND.md `default_theme` (loaded in Step 0)
-   - Fallback: `default`
-
-2. **Resolve color** (first match wins):
-   - CLI `--color` argument
-   - EXTEND.md `default_color` (loaded in Step 0)
-   - Omit if not set (theme default applies)
-
-3. **Validate metadata** from frontmatter (markdown) or HTML meta tags (HTML input):
-
-| Field | If Missing |
-|-------|------------|
-| Title | Prompt: "Enter title, or press Enter to auto-generate from content" |
-| Summary | Use fallback chain: frontmatter `description` → frontmatter `summary` → prompt user or auto-generate |
-| Author | Use fallback chain: CLI `--author` → frontmatter `author` → EXTEND.md `default_author` |
-
-**Auto-Generation Logic**:
-- **Title**: First H1/H2 heading, or first sentence
-- **Summary**: First paragraph, truncated to 120 characters
-
-4. **Cover Image Check** (required for API `article_type=news`):
-   1. Use CLI `--cover` if provided.
-   2. Else use frontmatter (`coverImage`, `featureImage`, `cover`, `image`).
-   3. Else check article directory default path: `imgs/cover.png`; never use `imgs/cover-xhs.png`.
-   4. Else fallback to first inline content image.
-   5. If still missing, stop and request a cover image before publishing.
-
-### 本地阅读检查
-
-排版遵循 [手机阅读排版规则](../baoyu-format-markdown/references/reading-layout.md)。`default` 主题使用米白背景、暖色标题标记和系统无衬线正文；正文 17px / 1.8 行高，二级标题 20px、三级标题 18px，普通加粗不叠加底色，显式 `<mark>` 保留高亮。正文图片按原始比例展示，上传替换后沿用统一图片样式。
-
-需要检查新稿或改动排版时，先生成离线预览：
-
-```bash
-${BUN_X} {baseDir}/scripts/wechat-preview.ts <article.md> --out <preview.html> --theme <theme> [--color <color>] [--no-cite]
-```
-
-打开预览，切换 360/390/430px 阅读宽度，检查段落、强调、图注和长图文字；按 `warnings` 判断是否需要调整排版稿。图片副本写入预览旁的 `.assets` 目录，预览不调用公众号 API。它不能模拟微信客户端的样式过滤，正式保存草稿后仍应在微信中核对。发布时继续传入 Markdown 原稿，让发布脚本完成自己的图片上传和替换。
-
-### Step 4: Publish to WeChat
-
-**CRITICAL**: Publishing scripts handle markdown conversion internally. Do NOT pre-convert markdown to HTML — pass the original markdown file directly. This ensures the API method renders images as `<img>` tags (for API upload) while the browser method uses placeholders (for paste-and-replace workflow).
-
-**Markdown citation default**:
-- For markdown input, ordinary external links are converted to bottom citations by default.
-- Use `--no-cite` only if the user explicitly wants to keep ordinary external links inline.
-- Existing HTML input is left as-is; no extra citation conversion is applied.
-
-**Reference and source sections**:
-- Normalize headings such as `引用链接`, `资料来源`, `参考资料`, `参考来源`, and `参考链接` to the same small citation typography used by generated bottom citations: muted 13px text, `1.7` line height, zero letter spacing, and italic URLs.
-- Write each entry as `来源标题：[https://...](https://...)`; display the real URL instead of labels such as `原文链接`.
-- Preserve a number only when the original body already contains the matching citation marker such as `[1]`. Otherwise use an unnumbered source entry and never invent sequential numbers.
-- Keep source titles regular weight. Do not make them bold or give source links the normal inline-link underline.
-
-**API method** (accepts `.md` or `.html`):
-
-```bash
-${BUN_X} {baseDir}/scripts/wechat-api.ts <file> --theme <theme> [--color <color>] [--title <title>] [--summary <summary>] [--author <author>] [--cover <cover_path>] [--no-cite]
-```
-
-**CRITICAL**: Always include `--theme` parameter. Never omit it, even if using `default`. Only include `--color` if explicitly set by user or EXTEND.md.
-
-**`draft/add` payload rules**:
-- Use endpoint: `POST https://api.weixin.qq.com/cgi-bin/draft/add?access_token=ACCESS_TOKEN`
-- `article_type`: `news` (default) or `newspic`
-- For `news`, include `thumb_media_id` (cover is required)
-- Always resolve and send:
-  - `need_open_comment` (default `1`)
-  - `only_fans_can_comment` (default `0`)
-- `author` resolution: CLI `--author` → frontmatter `author` → EXTEND.md `default_author`
-
-If script parameters do not expose the two comment fields, still ensure final API request body includes resolved values.
-
-**Browser method** (accepts `--markdown` or `--html`):
-
-```bash
-${BUN_X} {baseDir}/scripts/wechat-article.ts --markdown <markdown_file> --theme <theme> [--color <color>] [--no-cite]
-${BUN_X} {baseDir}/scripts/wechat-article.ts --html <html_file>
-```
-
-### Step 5: Completion Report
-
-**For API method**, include draft management link:
-
-```
-WeChat Publishing Complete!
-
-Input: [type] - [path]
-Method: API
-Theme: [theme name] [color if set]
-
-Article:
-• Title: [title]
-• Summary: [summary]
-• Images: [N] inline images
-• Comments: [open/closed], [fans-only/all users]
-
-Result:
-✓ Draft saved to WeChat Official Account
-• media_id: [media_id]
-
-Next Steps:
-→ Manage drafts: https://mp.weixin.qq.com (登录后进入「内容管理」→「草稿箱」)
-
-Files created:
-[• post-to-wechat/yyyy-MM-dd/slug.md (if plain text)]
-[• slug.html (converted)]
-```
-
-**For Browser method**:
-
-```
-WeChat Publishing Complete!
-
-Input: [type] - [path]
-Method: Browser
-Theme: [theme name] [color if set]
-
-Article:
-• Title: [title]
-• Summary: [summary]
-• Images: [N] inline images
-
-Result:
-✓ Draft saved to WeChat Official Account
-
-Files created:
-[• post-to-wechat/yyyy-MM-dd/slug.md (if plain text)]
-[• slug.html (converted)]
-```
-
-## Detailed References
-
-| Topic | Reference |
-|-------|-----------|
-| Image-text parameters, auto-compression | [references/image-text-posting.md](references/image-text-posting.md) |
-| Article themes, image handling | [references/article-posting.md](references/article-posting.md) |
-
-## Feature Comparison
-
-| Feature | Image-Text | Article (API) | Article (Browser) |
-|---------|------------|---------------|-------------------|
-| Plain text input | ✗ | ✓ | ✓ |
-| HTML input | ✗ | ✓ | ✓ |
-| Markdown input | Title/content | ✓ | ✓ |
-| Multiple images | ✓ (up to 9) | ✓ (inline) | ✓ (inline) |
-| Themes | ✗ | ✓ | ✓ |
-| Auto-generate metadata | ✗ | ✓ | ✓ |
-| Default cover fallback (`imgs/cover.png`) | ✗ | ✓ | ✗ |
-| Comment control (`need_open_comment`, `only_fans_can_comment`) | ✗ | ✓ | ✗ |
-| Requires Chrome | ✓ | ✗ | ✓ |
-| Requires API credentials | ✗ | ✓ | ✗ |
-| Speed | Medium | Fast | Slow |
-
-## Prerequisites
-
-**For API method**:
-- WeChat Official Account API credentials
-- Guided setup in Step 2, or manually set in `.baoyu-skills/.env`
-
-**For Browser method**:
-- Google Chrome
-- First run: log in to WeChat Official Account (session preserved)
-
-**Config File Locations** (priority order):
-1. Environment variables
-2. `<cwd>/.baoyu-skills/.env`
-3. `~/.baoyu-skills/.env`
-
-**Practical Setup Example**:
-```
-项目根目录/
-├── .baoyu-skills/
-│   └── baoyu-post-to-wechat/
-│       └── EXTEND.md      # 偏好设置（可选）
-│   └── .env               # API凭证（AppID/AppSecret）
-├── articles/              # 文章Markdown文件
-└── imgs/                 # 图片素材
-```
-
-> **Note**: `.env` 和 `EXTEND.md` 可以放在同一级目录（`.baoyu-skills/`），也可以分开。凭证文件只需包含 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET` 即可。
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Missing API credentials | Follow guided setup in Step 2 |
-| Access token error 40164: invalid ip | **IP not in whitelist** — add current IP to WeChat Official Account whitelist. Go to mp.weixin.qq.com → 开发 → 基本配置 → IP白名单. See [WeChat IP Whitelist Docs](https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html) |
-| Access token error | Check if API credentials are valid and not expired |
-| Not logged in (browser) | First run opens browser - scan QR to log in |
-| Chrome not found | Set `WECHAT_BROWSER_CHROME_PATH` env var |
-| Title/summary missing | Use auto-generation or provide manually |
-| No cover image | Add frontmatter cover or place `imgs/cover.png` in article directory |
-| Wrong comment defaults | Check `EXTEND.md` keys `need_open_comment` and `only_fans_can_comment` |
-| Paste fails | Check system clipboard permissions |
-
-## Extension Support
-
-Custom configurations via EXTEND.md. See **Preferences** section for paths and supported options.
+交付账号、实际动作、结果、必要回执及文件链接。不要固定使用“发布完成”描述草稿或预填，也不默认拓展到其他平台。

@@ -151,6 +151,7 @@ async function main(): Promise<void> {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
+    if (['--title', '--theme', '--color'].includes(arg) && (args[i + 1] === undefined || args[i + 1]!.startsWith('--'))) throw new Error(`参数缺少值：${arg}`);
     if (arg === "--title" && args[i + 1]) {
       title = args[++i];
     } else if (arg === "--theme" && args[i + 1]) {
@@ -161,19 +162,19 @@ async function main(): Promise<void> {
       citeStatus = true;
     } else if (arg === "--no-cite") {
       citeStatus = false;
-    } else if (!arg.startsWith("-")) {
+    } else if (!arg.startsWith("-") && !markdownPath) {
       markdownPath = arg;
-    }
+    } else throw new Error(`未知参数：${arg}`);
   }
 
   if (!markdownPath) {
     console.error("Error: Markdown file path is required");
-    process.exit(1);
+    process.exit(2);
   }
 
   if (!fs.existsSync(markdownPath)) {
     console.error(`Error: File not found: ${markdownPath}`);
-    process.exit(1);
+    process.exit(2);
   }
 
   const result = await convertMarkdown(markdownPath, { title, theme, color, citeStatus });
@@ -183,6 +184,6 @@ async function main(): Promise<void> {
 if (import.meta.main) {
   await main().catch((error) => {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
+    process.exit(2);
   });
 }

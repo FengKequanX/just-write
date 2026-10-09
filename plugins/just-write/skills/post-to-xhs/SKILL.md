@@ -1,86 +1,63 @@
 ---
 name: post-to-xhs
-description: Render a locked-title Markdown article into Xiaohongshu carousel PNG images, caption.md, phone preview, and layout report. Use when the user asks to prepare, generate, sync, or post Xiaohongshu/XHS content; this skill creates materials only and never controls or publishes through the creator platform.
+description: 将已有 Markdown 文章生成本地小红书轮播 PNG、独立配文、手机预览和渲染报告。适用于准备 XHS 素材；本技能不控制或发布到创作者平台。
 ---
 
-# Generate Xiaohongshu Materials
+# 小红书本地材料
 
-将排版稿渲染到 `<article-dir>/xhs/`，生成含封面最多 18 张的连续正文轮播图，以及 `caption.md`、手机预览和渲染报告。
+使用本次确定的文章标题和排版稿，生成 `<文章目录>/xhs/`。含封面最多 18 张，正文与图片连续完整；成功交付本地文件。
 
-## Boundaries
+## 输入与内容保护
 
-- Generate local materials only. Never open or control Xiaohongshu, upload files, fill forms, or publish.
-- Require a locked article title before rendering. Reuse it verbatim in the cover and `caption.md`; do not shorten it for platform limits.
-- Use the formatted article as input and preserve inline image order.
-- Resolve the cover from frontmatter `xhsCoverImage`, then `imgs/cover-xhs.png`. Never fall back to the WeChat cover `imgs/cover.png`.
+- 用户指定或确认标题原样用于封面和 `caption.md`。唯一现有标题可以沿用，不补造历史确认；多个候选或冲突才确认。
+- 正文图片顺序和内容保留；微信封面不代替 XHS 封面。
+- 封面取 frontmatter `xhsCoverImage`，再取 `imgs/cover-xhs.png`。没有自定义封面时可以用渲染器文字封面；用户要求指定图片但不可用时先解决缺口。
+- 本技能只产出本地材料，不打开 XHS、预填、上传或发布。
+- 有保真冲突时读 [共用内容契约](../just-write/references/content-contract.md)。
 
-## Configuration
+## 配文与话题
 
-Load the first existing `EXTEND.md` in this order:
+已有 `description` 或 `summary` 适合配文时可沿用。需要独立平台正文、摘要缺失或原稿受保护时，依据正文准备 UTF-8 配文文本，使用 `--caption-body-file`；不回写文章。
 
-1. `<cwd>/.baoyu-skills/post-to-xhs/EXTEND.md`
-2. `$XDG_CONFIG_HOME/baoyu-skills/post-to-xhs/EXTEND.md`
-3. `~/.baoyu-skills/post-to-xhs/EXTEND.md`
+显式文件只含配文正文，标题、话题和作者由现有参数处理。显式文件优先于 `description || summary`，即使文件为空也有效；缺省保持原有 fallback。正文不能新增经历、数字或结果。
 
-Only these keys are valid:
+根据标题和主线选择少量准确话题，至多五个，一至两个足够就不强凑。配置里的通用话题仅供旧 CLI fallback；技能执行时显式传本篇话题，不追加别篇或热门无关词。
+
+## 运行与检查
+
+```text
+bun <本技能目录>/scripts/md-to-xhs.ts <排版稿.md> --out <文章目录>/xhs --tags "<话题1>,<话题2>" [--caption-body-file <配文正文.txt>]
+```
+
+可选 `--theme / --aspect / --author`。渲染器自行读取配置，向 staging 写入 PNG、配文、预览和报告；成功才替换本次管理产物，无关文件保留。不要在渲染结束后临时改 `caption.md` 造成产物不同步。
+
+遵循 [手机阅读规则](../baoyu-format-markdown/references/reading-layout.md)。特殊图片、比例或分页问题时读 [渲染与图片](references/rendering.md)。不为压到上限删正文、缩窄长图或静默截断。
+
+输出：
+
+```text
+xhs/
+├── 01-cover.png
+├── 02-content-*.png
+├── caption.md
+├── preview.html
+└── render-report.json
+```
+
+打开预览总览及 360／390／430px 阅读宽度，检查连续内容、背景与字体、封面标题、图注、图片分段衔接和最后一页。机器报告不代替视觉判断。核对配文标题、正文和本篇话题。成功并完成相关视觉检查后才登记 XHS `generated`。
+
+交付产物链接、图片数和需要注意的问题；不默认输出全部配置或安排平台上传。
+
+## 配置
+
+按项目 `.baoyu-skills/post-to-xhs/EXTEND.md`、XDG（未设置时 `~/.config`）、用户 `~/.baoyu-skills/post-to-xhs/EXTEND.md` 顺序读取首个配置，CLI 优先。
 
 ```yaml
 enabled: false
 default_author: 作者名
 default_theme: default
 default_aspect: "3:4"
-default_topic_tags: AI观察,科技,编程
+default_topic_tags: 旧CLI默认话题
 ```
 
-`default_aspect_ratio` and `dry_run` were removed and must produce a migration error. CLI arguments override configuration. Supported aspects are `3:4`, `9:16`, `1:1`, and `4:3`; the only bundled theme is `default`.
-
-Treat `default_topic_tags` as a compatibility fallback for direct CLI use only. During skill execution, never reuse it as the article's topics.
-
-## Select article topics
-
-Before rendering, derive 3-5 topics from this article's locked title, summary, and core argument. Every topic must be directly supported by the current article:
-
-- Prefer the central subject plus its specific entities, concepts, industry, or reader use case.
-- Keep the set narrow enough that all topics describe the same article.
-- Do not pad the set with generic defaults such as `科技`, `AI观察`, or `编程` unless that concept is central to the article.
-- Do not carry topics over from another article or append keyword matches after the set is chosen.
-
-Pass the derived set through `--tags`. When article-specific topics are supplied, the renderer uses exactly that set, deduplicated and capped at five.
-
-## Run
-
-Resolve Bun as `bun`, or use `npx -y bun` when Bun is unavailable. Then run:
-
-```bash
-bun <this-skill>/scripts/md-to-xhs.ts <article-dir>/<title>-formatted.md --out <article-dir>/xhs --tags "<topic-1>,<topic-2>,<topic-3>"
-```
-
-Other optional arguments: `--theme`, `--aspect`, and `--author`. The skill workflow always supplies article-specific `--tags`.
-
-The renderer reads configuration itself, validates all options, renders into a staging directory, and replaces managed numbered PNG files, `caption.md`, `preview.html`, and `render-report.json` after success. Unrelated files in `xhs/` remain untouched.
-
-## 阅读与图片布局
-
-遵循 [手机阅读排版规则](../baoyu-format-markdown/references/reading-layout.md)。普通加粗只改变字重，显式 `<mark>` 才带底色；单次源文件折行自然排版，明确换行和新段落保留。
-
-整组含封面最多 18 张。正文、标题和图片按原文顺序连续排版，当前页放满后自然翻页；短段落不强制独立或居中，不额外生成装饰性结束页。标题保留后续内容，段落避免只留一行。
-
-图片保持内容宽度随文排版；超过剩余空间时，在空白处优先断开并留少量重叠，后续文字接着图片尾段继续排。短横图尽量完整，竖图不自动缩窄成独立页。截图不使用 `cover` 裁切，不无限缩小。默认正文 42px，超限时只尝试一次 40px 的紧凑排版；仍超过 18 张则报错并保留旧产物，需要拆篇或精简，禁止截断内容。低分辨率原图无法靠放大补回细节。
-
-特殊图片可以在原始 HTML 的 `<img>` 上设置 `data-xhs-image-mode="auto|inline|page|split"`，默认 `auto`。`inline` 随文且不自动分段，`page` 强制整张独立页，`split` 按可分段图片处理，整图能放下时仍保持完整。仅在确有需要时覆盖自动布局；过长的图片说明或无法容纳的块会报错，不静默裁掉。
-
-## Expected output
-
-```text
-xhs/
-├── 01-cover.png
-├── 02-content-*.png
-├── ...
-├── caption.md
-├── preview.html
-└── render-report.json
-```
-
-打开 `preview.html` 检查整组总览和 360/390/430px 手机预览，重点检查正文连续性、短段落是否孤立、非末页是否大面积留白、图片分段衔接和最后一页。`render-report.json` 记录 18 张上限、采用的字号方案、每页高度与占用比例、图片显示尺寸和原图分段范围；成功产物已通过文字完整性、图片顺序、连续覆盖、最终 DOM 溢出和 PNG 尺寸检查。末页允许自然留白，不为填满而拉大段距或改写正文。
-
-Verify that `caption.md` contains only the selected article-specific topics. Report the input, configuration source, aspect, image count, exact output paths, title, topics, and material warnings. End by telling the user to upload the materials manually. When invoked by `just-write`, update XHS workflow status to `generated` only after the renderer succeeds and visual checks pass.
+仅这些键有效；`default_aspect_ratio` 与 `dry_run` 是已移除键，须按错误提示迁移。支持 `3:4 / 9:16 / 1:1 / 4:3`，内置主题为 `default`。`enabled` 只是流程提供该选项的偏好，不自动授权生成或平台操作。

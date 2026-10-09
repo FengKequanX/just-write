@@ -8,6 +8,8 @@ export interface WechatAccount {
   default?: boolean;
   default_publish_method?: string;
   default_author?: string;
+  default_theme?: string;
+  default_color?: string;
   need_open_comment?: number;
   only_fans_can_comment?: number;
   app_id?: string;
@@ -27,10 +29,13 @@ export interface WechatExtendConfig {
 }
 
 export interface ResolvedAccount {
+  source?: 'account' | 'legacy_single_account' | 'offline_unselected';
   name?: string;
   alias?: string;
   default_publish_method?: string;
   default_author?: string;
+  default_theme?: string;
+  default_color?: string;
   need_open_comment: number;
   only_fans_can_comment: number;
   app_id?: string;
@@ -118,6 +123,8 @@ function parseWechatExtend(content: string): WechatExtendConfig {
       default: a.default === "true" || a.default === "1",
       default_publish_method: a.default_publish_method || undefined,
       default_author: a.default_author || undefined,
+      default_theme: a.default_theme || undefined,
+      default_color: a.default_color || undefined,
       need_open_comment: a.need_open_comment ? toBool01(a.need_open_comment) : undefined,
       only_fans_can_comment: a.only_fans_can_comment ? toBool01(a.only_fans_can_comment) : undefined,
       app_id: a.app_id || undefined,
@@ -149,25 +156,42 @@ export function loadWechatExtendConfig(): WechatExtendConfig {
   return {};
 }
 
-function selectAccount(config: WechatExtendConfig, alias?: string): WechatAccount | undefined {
-  if (!config.accounts || config.accounts.length === 0) return undefined;
-  if (alias) return config.accounts.find(a => a.alias === alias);
-  if (config.accounts.length === 1) return config.accounts[0];
-  return config.accounts.find(a => a.default);
+function selectAccount(config: WechatExtendConfig, alias?: string, offline = false): WechatAccount | undefined {
+  const accounts = config.accounts ?? [];
+  const aliases = new Set<string>();
+  for (const account of accounts) {
+    if (!account.alias.trim()) throw new Error('微信账号 alias 不能为空');
+    if (aliases.has(account.alias)) throw new Error(`微信账号 alias 重复：${account.alias}`);
+    aliases.add(account.alias);
+  }
+  if (accounts.filter(account => account.default).length > 1) throw new Error('微信配置不能有多个默认账号');
+  if (alias) {
+    const selected = accounts.find(account => account.alias === alias);
+    if (!selected) throw new Error(`未知微信账号：${alias}`);
+    return selected;
+  }
+  if (!accounts.length) return undefined;
+  if (accounts.length === 1) return accounts[0];
+  const selected = accounts.find(account => account.default);
+  if (!selected && !offline) throw new Error('存在多个微信账号，请用 --account 明确选择');
+  return selected;
 }
 
-export function resolveAccount(config: WechatExtendConfig, alias?: string): ResolvedAccount {
-  const acct = selectAccount(config, alias);
+export function resolveAccount(config: WechatExtendConfig, alias?: string, options: { offline?: boolean } = {}): ResolvedAccount {
+  const acct = selectAccount(config, alias, options.offline);
   return {
+    source: acct ? 'account' : config.accounts?.length ? 'offline_unselected' : 'legacy_single_account',
     name: acct?.name,
     alias: acct?.alias,
     default_publish_method: acct?.default_publish_method ?? config.default_publish_method,
     default_author: acct?.default_author ?? config.default_author,
+    default_theme: acct?.default_theme ?? config.default_theme,
+    default_color: acct?.default_color ?? config.default_color,
     need_open_comment: acct?.need_open_comment ?? config.need_open_comment ?? 1,
     only_fans_can_comment: acct?.only_fans_can_comment ?? config.only_fans_can_comment ?? 0,
     app_id: acct?.app_id,
     app_secret: acct?.app_secret,
-    chrome_profile_path: acct?.chrome_profile_path ?? config.chrome_profile_path,
+    chrome_profile_path: acct ? acct.chrome_profile_path : config.chrome_profile_path,
   };
 }
 
@@ -299,7 +323,7 @@ export function loadCredentials(account?: ResolvedAccount): LoadedCredentials {
     );
   }
 
-  sources.push(
+  if (!account?.alias) sources.push(
     buildCredentialSource("process.env", process.env, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
     buildCredentialSource("<cwd>/.baoyu-skills/.env", cwdEnv, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),
     buildCredentialSource("~/.baoyu-skills/.env", homeEnv, "WECHAT_APP_ID", "WECHAT_APP_SECRET"),

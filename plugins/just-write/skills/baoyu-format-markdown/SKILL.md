@@ -1,6 +1,6 @@
 ---
 name: baoyu-format-markdown
-description: Formats plain text or markdown files with frontmatter, titles, summaries, headings, bold, lists, and code blocks. Use when user asks to "format markdown", "beautify article", "add formatting", or improve article layout. Outputs to {filename}-formatted.md.
+description: 优化已有文章或纯文本的 Markdown 阅读结构，输出衍生排版稿。标题建议和发布元数据仅在用户要求时单独处理，纯排版保留正文及现有标题。
 metadata:
   version: 1.57.0
   openclaw:
@@ -11,351 +11,54 @@ metadata:
         - npx
 ---
 
-# Markdown Formatter
+# Markdown 排版
 
-Transforms plain text or markdown into well-structured, reader-friendly markdown. The goal is to help readers quickly grasp key points, highlights, and structure — without changing any original content.
+先确定本次启用的任务：排版、标题建议、元数据准备，可以组合。仅“排版／美化文章”默认启用排版。读取全文后直接处理明确范围，不为已有充分输入加选择环节。
 
-**Core principle**: Only adjust formatting and fix obvious typos. Never add, delete, or rewrite content.
+## 排版
 
-## User Input Tools
+读 [手机阅读规则](references/reading-layout.md)，按语义调整段落、标题层级、强调、列表、代码和表格：
 
-When this skill prompts the user, follow this tool-selection rule (priority order):
+- 保留原句、数字、限定、引语、术语、来源身份和链接目标；不替作者改判断。
+- 已有唯一标题原样沿用，H1 与 frontmatter 默认保留，不在排版中抽取、删除或重新生成。
+- 并列内容可换成列表，真实步骤及顺序完整。新增中性小标题只能表达已有内容，不能附加评价。
+- 调整强调标记时保留术语全称和解释，不为了增加装饰而制造金句。
+- 图注与图片对应；已删除图注不恢复。
+- 明显文字错误只有在请求包含文字修正时处理；纯排版发现疑点可以说明，不默认改词。
+- 无明显问题可以保持现状。分析是工作依据，不默认另写 `-analysis.md`。
+- 严格保护任务不改变指定字符串或整稿；必要元数据和配文放入独立产物。
 
-1. **Prefer built-in user-input tools** exposed by the current agent runtime — e.g., `AskUserQuestion`, `request_user_input`, `clarify`, `ask_user`, or any equivalent.
-2. **Fallback**: if no such tool exists, emit a numbered plain-text message and ask the user to reply with the chosen number/answer for each question.
-3. **Batching**: if the tool supports multiple questions per call, combine all applicable questions into a single call; if only single-question, ask them one at a time in priority order.
+保存到 `<原文件名>-formatted.md`，保留源稿。覆盖已有衍生稿前保存不冲突备份。用户明确要求原地修改时才处理源稿。
 
-Concrete `AskUserQuestion` references below are examples — substitute the local equivalent in other runtimes.
+遇到保真与表达规则冲突，读 [共用内容契约](../just-write/references/content-contract.md)。
 
-## Script Directory
+## 标题与元数据任务
 
-Scripts in `scripts/` subdirectory. `{baseDir}` = this SKILL.md's directory path. Resolve `${BUN_X}` runtime: if `bun` installed → `bun`; if `npx` available → `npx -y bun`; else suggest installing bun. Replace `{baseDir}` and `${BUN_X}` with actual values.
+只有请求优化／生成标题时读 [标题建议](references/title-formulas.md)。按准确性、范围、读者用途和作者语气推荐，描述式标题与其他候选同等可选，不默认最强钩子。数字、亲历、耗时和效果必须来自材料。用户指定标题不再优化。
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/main.ts` | Main entry point with CLI options (uses remark-cjk-friendly for CJK emphasis) |
-| `scripts/quotes.ts` | Replace ASCII quotes with fullwidth quotes |
-| `scripts/autocorrect.ts` | Add CJK/English spacing via autocorrect |
+需要发布摘要、作者或平台字段时读 [元数据准备](references/metadata.md)。纯排版不创建 frontmatter、slug、summary 或 description。标题与 H1 冲突只有在需要采用其中一个作为平台标题时解决；不借排版悄悄改其中之一。
 
-## Preferences (EXTEND.md)
+配置中 `auto_select / auto_select_title / auto_select_summary` 只影响本次已启用的标题／元数据任务，不能自动启用这些任务或覆盖用户选择。
 
-Check EXTEND.md in priority order — the first one found wins:
+## 排印脚本
 
-| Priority | Path | Scope |
-|----------|------|-------|
-| 1 | `.baoyu-skills/baoyu-format-markdown/EXTEND.md` | Project |
-| 2 | `${XDG_CONFIG_HOME:-$HOME/.config}/baoyu-skills/baoyu-format-markdown/EXTEND.md` | XDG |
-| 3 | `$HOME/.baoyu-skills/baoyu-format-markdown/EXTEND.md` | User home |
+脚本目录为本技能 `scripts/`，Bun 可直接运行；不存在时使用已有可用的 `npx -y bun`，两者都缺失则说明需要安装。
 
-If none found, use defaults — no first-time setup required for this skill.
-
-**EXTEND.md supports**:
-
-| Setting | Values | Default | Description |
-|---------|--------|---------|-------------|
-| `auto_select` | `true`/`false` | `false` | Skip both title and summary selection, auto-pick best |
-| `auto_select_title` | `true`/`false` | `false` | Skip title selection only |
-| `auto_select_summary` | `true`/`false` | `false` | Skip summary selection only |
-| Other | — | — | Default formatting options, typography preferences |
-
-## Usage
-
-The workflow has two phases: **Analyze** (understand the content) then **Format** (apply formatting). The current agent performs content analysis and formatting (Steps 1-5), then runs the script for typography fixes (Step 6).
-
-## Workflow
-
-### Step 1: Read & Detect Content Type
-
-Read the user-specified file, then detect content type:
-
-| Indicator | Classification |
-|-----------|----------------|
-| Has `---` YAML frontmatter | Markdown |
-| Has `#`, `##`, `###` headings | Markdown |
-| Has `**bold**`, `*italic*`, lists, code blocks, blockquotes | Markdown |
-| None of above | Plain text |
-
-用户已明确要求优化排版时，直接执行 Optimize；用户要求保留格式时按原格式处理。仅在排版范围不明时询问下面的选项。
-
-**If Markdown detected and the scope is unresolved, use `AskUserQuestion` to ask:**
-
-```
-Detected existing markdown formatting. What would you like to do?
-
-1. Optimize formatting (Recommended)
-   - Analyze content, improve headings, bold, lists for readability
-   - Run typography script (spacing, emphasis fixes)
-   - Output: {filename}-formatted.md
-
-2. Keep original formatting
-   - Preserve existing markdown structure
-   - Run typography script only
-   - Output: {filename}-formatted.md
-
-3. Typography fixes only
-   - Run typography script on original file in-place
-   - No copy created, modifies original file directly
+```text
+bun <本技能目录>/scripts/main.ts <衍生稿.md> [选项]
 ```
 
-**Based on user choice:**
-- **Optimize**: Continue to Step 2 (full workflow)
-- **Keep original**: Skip to Step 5, copy file then run Step 6
-- **Typography only**: Skip to Step 6, run on original file directly
+| 选项 | 默认行为 |
+|---|---|
+| `--quotes / --no-quotes` | 默认不换引号 |
+| `--spacing / --no-spacing` | 默认处理中英文间距 |
+| `--emphasis / --no-emphasis` | 默认修复 CJK 强调标记 |
+| `--help` | 查看用法 |
 
-### Step 2: Analyze Content (Reader's Perspective)
+保护原话和字符串时显式使用 `--no-quotes --no-spacing`；强调标记也受保护时再加 `--no-emphasis`。保护整文件字节时不运行会重排 YAML 的脚本。脚本总会规范化 frontmatter 形式，不能把“值未变”报告成“文件未改”。
 
-Read the entire content carefully. Think from a reader's perspective: what would help them quickly understand and remember the key information?
+脚本只能做排印，不能替 agent 完成结构判断。运行后比较受保护内容、元数据值、代码和链接目标；交付排版稿路径与有意义的变动，不统计金句或装饰数量。
 
-Produce an analysis covering these dimensions:
+## 配置
 
-**2.1 Highlights & Key Insights**
-- Core arguments or conclusions the author makes
-- Surprising facts, data points, or counterintuitive claims
-- Memorable quotes or well-phrased sentences (golden quotes)
-
-**2.2 Structure Assessment**
-- Does the content have a clear logical flow? What is it?
-- Are there natural section boundaries that lack headings?
-- Are there long walls of text that could benefit from visual breaks?
-
-**2.3 Reader-Important Information**
-- Actionable advice or takeaways
-- Definitions, explanations of key concepts
-- Lists or enumerations buried in prose
-- Comparisons or contrasts that would be clearer as tables
-
-**2.4 Formatting Issues**
-- Missing or inconsistent heading hierarchy
-- Paragraphs that mix multiple topics
-- Parallel items written as prose instead of lists
-- Code, commands, or technical terms not marked as code
-- Obvious typos or formatting errors
-
-**Save analysis to file**: `{original-filename}-analysis.md`
-
-The analysis file serves as the blueprint for Step 3. Use this format:
-
-```markdown
-# Content Analysis: {filename}
-
-## Highlights & Key Insights
-- [list findings]
-
-## Structure Assessment
-- Current flow: [describe]
-- Suggested sections: [list heading candidates with brief rationale]
-
-## Reader-Important Information
-- [list actionable items, key concepts, buried lists, potential tables]
-
-## Formatting Issues
-- [list specific issues with location references]
-
-## Typos Found
-- [list any obvious typos with corrections, or "None found"]
-```
-
-### Step 3: Check/Create Frontmatter, Title & Summary
-
-Check for YAML frontmatter (`---` block). Create if missing.
-
-| Field | Processing |
-|-------|------------|
-| `title` | See **Title Generation** below |
-| `slug` | Infer from file path or generate from title |
-| `summary` | One-sentence concise summary (see **Summary Generation** below) |
-| `description` | Longer descriptive summary (see **Summary Generation** below) |
-| `coverImage` | Check if `imgs/cover.png` exists in same directory; if so, use relative path |
-
-#### Title Generation
-
-用户要求标题不变或上游已锁定标题时，原样保留并跳过标题候选。其他情况按下面流程生成候选，遵循 `auto_select_title` 配置。
-
-**Preparation** — read the full text and extract:
-- Core argument (one sentence: "what is this article about?")
-- Most impactful opinion or conclusion
-- Reader pain point or curiosity trigger
-- Most memorable metaphor or golden quote
-
-**Generate candidates** using formulas from `references/title-formulas.md`:
-
-1. Select the **2-3 best-matching hook formulas** based on the article's content, tone, and structure (see "When to pick each formula" in the reference)
-2. Generate **1-2 straightforward titles** (descriptive or declarative, no formula — clear and accurate)
-3. If the user specifies a direction (e.g., "make it suspenseful"), prioritize that direction
-4. Total: **4-5 candidates**
-
-Present via `AskUserQuestion`:
-
-```
-Pick a title:
-
-1. [Hook title A] — (recommended) [formula name]
-2. [Hook title B] — [formula name]
-3. [Hook title C] — [formula name]
-4. [Straightforward title D] — straightforward
-5. [Straightforward title E] — straightforward
-
-Enter number, or type a custom title:
-```
-
-Put the strongest hook first and mark it `(recommended)`. See `references/title-formulas.md` for principles and prohibited patterns.
-
-If the first line is an H1, extract it to frontmatter and remove it from the body. If frontmatter already has a `title`, include it as context but still generate fresh candidates — the existing title may be weak.
-
-**Skip behavior**: If `auto_select: true` or `auto_select_title: true`, skip the user prompt and use the top candidate directly.
-
-#### Summary Generation
-
-Generate two versions directly (no user selection), both stored in frontmatter:
-
-| Field | Length | Purpose |
-|-------|--------|---------|
-| `summary` | 1 sentence, ~50-80 chars | Concise hook — for feeds, social sharing, SEO meta |
-| `description` | 2-3 sentences, ~100-200 chars | Richer context — for article previews, newsletter blurbs |
-
-**Principles**:
-
-- Convey **core value** to the reader, not just the topic
-- Use concrete details (numbers, outcomes, specific methods) over vague descriptions
-- `summary` should be punchy and self-contained; `description` can expand with supporting details
-- If frontmatter already has `summary` or `description`, keep the existing one and only generate the missing field
-
-**Prohibited patterns**:
-
-- "This article introduces...", "This article explores..."
-- Pure topic description without value proposition
-- Repeating the title in different words
-
-Once the title is in frontmatter, the body should NOT contain an H1 (avoid duplication).
-
-### Step 4: Format Content
-
-Apply formatting guided by the Step 2 analysis. The goal is making the content scannable and the key points impossible to miss.
-
-先读取 [手机阅读排版规则](references/reading-layout.md)，据此处理段落、加粗、高亮和明确换行。不要为了“优化”增加装饰数量；渲染器会分别提供公众号与轮播的显示样式。
-
-**Formatting toolkit:**
-
-| Element | When to use | Format |
-|---------|-------------|--------|
-| Headings | Natural topic boundaries, section breaks | `##`, `###` hierarchy |
-| Bold | Key conclusions, important terms, core takeaways | `**bold**` |
-| Unordered lists | Parallel items, feature lists, examples | `- item` |
-| Ordered lists | Sequential steps, ranked items, procedures | `1. item` |
-| Tables | Comparisons, structured data, option matrices | Markdown table |
-| Code | Commands, file paths, technical terms, variable names | `` `inline` `` or fenced blocks |
-| Blockquotes | Notable quotes, important warnings, cited text | `> quote` |
-| Separators | Major topic transitions | `---` |
-
-For `引用链接`, `资料来源`, `参考资料`, `参考来源`, or `参考链接` sections, normalize every entry to `来源标题：[https://...](https://...)`. Keep an ordered number only when the body already contains the matching citation marker such as `[1]`; otherwise use unnumbered entries. Do not use `原文链接` as the visible link text and do not bold source titles. The WeChat renderer applies the shared small citation typography.
-
-**Formatting principles — what NOT to do:**
-- Do NOT add sentences, explanations, or commentary
-- Do NOT delete or shorten any content
-- Do NOT rephrase or rewrite the author's words
-- Do NOT add headings that editorialize (e.g., "Amazing Discovery" — use neutral descriptive headings)
-- Do NOT over-format: not every sentence needs bold, not every paragraph needs a heading
-
-**Formatting principles — what TO do:**
-- Preserve the author's voice, tone, and every word
-- **Bold key conclusions and core takeaways** — the sentences a reader would highlight
-- Extract parallel items from prose into lists only when the structure is clearly there
-- Add headings where the topic genuinely shifts — prefer vivid, specific headings over generic ones (e.g., "3 天搞定 vs 传统方案" over "方案对比")
-- Use tables for comparisons or structured data buried in prose
-- Use blockquotes for golden quotes, memorable statements, or important warnings
-- Fix obvious typos (based on Step 2 findings)
-
-### Step 5: Save Formatted File
-
-Save as `{original-filename}-formatted.md`
-
-**Backup existing file:**
-
-```bash
-if [ -f "{filename}-formatted.md" ]; then
-  mv "{filename}-formatted.md" "{filename}-formatted.backup-$(date +%Y%m%d-%H%M%S).md"
-fi
-```
-
-### Step 6: Execute Typography Script
-
-Run the formatting script on the output file:
-
-```bash
-${BUN_X} {baseDir}/scripts/main.ts {output-file-path} [options]
-```
-
-**Script Options:**
-
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--quotes` | `-q` | Replace ASCII quotes with fullwidth quotes `"..."` | false |
-| `--no-quotes` | | Do not replace quotes | |
-| `--spacing` | `-s` | Add CJK/English spacing via autocorrect | true |
-| `--no-spacing` | | Do not add CJK/English spacing | |
-| `--emphasis` | `-e` | Fix CJK emphasis punctuation issues | true |
-| `--no-emphasis` | | Do not fix CJK emphasis issues | |
-
-**Examples:**
-
-```bash
-# Default: spacing + emphasis enabled, quotes disabled
-${BUN_X} {baseDir}/scripts/main.ts article.md
-
-# Enable all features including quote replacement
-${BUN_X} {baseDir}/scripts/main.ts article.md --quotes
-
-# Only fix emphasis issues, skip spacing
-${BUN_X} {baseDir}/scripts/main.ts article.md --no-spacing
-```
-
-**Script performs (based on options):**
-1. Fix CJK emphasis/bold punctuation issues (default: enabled)
-2. Add CJK/English mixed text spacing via autocorrect (default: enabled)
-3. Replace ASCII quotes with fullwidth quotes (default: disabled)
-4. Format frontmatter YAML (always enabled)
-
-### Step 7: Completion Report
-
-Display a report summarizing all changes made:
-
-```
-**Formatting Complete**
-
-**Files:**
-- Analysis: {filename}-analysis.md
-- Formatted: {filename}-formatted.md
-
-**Content Analysis Summary:**
-- Highlights found: X key insights
-- Golden quotes: X memorable sentences
-- Formatting issues fixed: X items
-
-**Changes Applied:**
-- Frontmatter: [added/updated] (title, slug, summary)
-- Headings added: X (##: N, ###: N)
-- Bold markers added: X
-- Lists created: X (from prose → list conversion)
-- Tables created: X
-- Code markers added: X
-- Blockquotes added: X
-- Typos fixed: X [list each: "original" → "corrected"]
-
-**Typography Script:**
-- CJK spacing: [applied/skipped]
-- Emphasis fixes: [applied/skipped]
-- Quote replacement: [applied/skipped]
-```
-
-Adjust the report to reflect actual changes — omit categories where no changes were made.
-
-## Notes
-
-- Preserve original writing style and tone
-- Specify correct language for code blocks (e.g., `python`, `javascript`)
-- Maintain CJK/English spacing standards
-- The analysis file is a working document — it helps maintain consistency between what was identified and what was formatted
-
-## Extension Support
-
-Custom configurations via EXTEND.md. See **Preferences** section for paths and supported options.
+按项目 `.baoyu-skills/baoyu-format-markdown/EXTEND.md`、XDG（未设置时 `~/.config`）、用户 `~/.baoyu-skills/baoyu-format-markdown/EXTEND.md` 顺序读取首个文件。配置可记录排印偏好和已启用任务的自动选择行为；没有配置直接使用默认，不要求首次设置。

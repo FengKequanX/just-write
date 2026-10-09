@@ -1,94 +1,70 @@
 ---
 name: just-write
-description: Route and execute Chinese content creation work, including full article writing, polishing, Markdown formatting, WeChat publishing, Xiaohongshu carousel generation, and Douyin image-note syncing. Use whenever the user asks to write, edit, polish, format, prepare, or publish article content.
+description: 根据写作目标协调中文文章起草、编辑、排版及多平台素材流程。适用于从想法写稿、组合任务或需要续作的文章项目；单独润色、排版和平台素材任务直接交给对应子技能。
 ---
 
 # Just Write
 
-Turn an idea or existing article into publishable content. Preserve user authorship, make reversible transformations directly, and gate title locking and real publishing.
+把当前请求变成完成的文章或产物。信息充分时直接交付；仅在实质歧义会影响结果，或用户要求逐步协作时确认。保护作者提供的事实、原话、标题、封面及操作边界。
 
-## Route the request
+## 识别当前任务
 
-Choose exactly one mode before acting:
+选一个主 mode，并按请求串联必要子任务。mode 是入口，不是必须走完的六步模板。
 
-| Mode | Trigger | Entry behavior |
+| mode | 请求 | 处理 |
 |---|---|---|
-| `full` | Write an article from an idea or topic | Run the six-step workflow below |
-| `polish` | Polish, rewrite, remove AI tone, or match the author's voice | Load `writing-style`; follow its seven-pass revision and load `humanizer-zh` in pass five |
-| `format` | Format Markdown or generate title candidates | Load `baoyu-format-markdown` directly |
-| `wechat_publish` | Publish an existing article to WeChat | Start from asset checks and WeChat confirmation |
-| `xhs_materials` | Generate Xiaohongshu images or caption | Load `post-to-xhs`; never publish |
-| `douyin_sync` | Dry-run or upload an existing carousel to Douyin | Load `sync-to-douyin` |
+| `full` | 从想法或材料写文章 | 用 `writing-style` 起草并完成适用检查；只有选题不明才用 `brainstorming` |
+| `polish` | 润色、重写、表达审阅 | 用 `writing-style` 判断编辑范围，必要时用 `humanizer-zh` 局部修稿 |
+| `format` | Markdown 排版、标题建议 | 用 `baoyu-format-markdown`，分别启用用户要求的排版、标题或元数据任务 |
+| `wechat_publish` | 保存已有文章到微信草稿箱 | 用 `baoyu-post-to-wechat` 核对素材、账号、操作与结果 |
+| `xhs_materials` | 小红书配文或轮播 | 用 `post-to-xhs` 生成并检查本地材料 |
+| `douyin_sync` | 抖音图文校验、编辑器交接或上传 | 用 `sync-to-douyin`，默认校验，真实上传需已有明确授权 |
 
-Do not force a direct request through unrelated full-workflow steps. If the intent mixes modes, finish reversible preparation first and ask only before title locking or a real publish.
+- “写一篇文章”交付文章及适用编辑检查，不自动延伸到图片生成或平台操作。
+- 组合请求按实际依赖推进，例如写稿 → 排版 → 本地轮播；不要加入未请求的阶段。
+- 用户说“带我逐步完成”“先讨论选题”时，在影响方向的节点等待；自然语言确认和已有授权有效，不要求精确口令。
+- 主流程已明确范围和输入时，子技能完成本步骤并返回产物，不重复发起同一确认。
+- 发现缺口时，继续完成不依赖缺口的部分。只问会改变结果的问题。
+- 内容规则冲突或涉及保真编辑时，读 [共用内容契约](references/content-contract.md)。
 
-## Persist article state
+## 处理文章与标题
 
-Use `scripts/workflow-state.ts` for every mode once an article directory exists:
+用户指定或确认的文章标题原样用于文章、排版稿、微信及 XHS 封面和配文。只有标题候选冲突、仍在选择或用户要求换标题时才确认。现有唯一标题可沿用，但不能据此补造历史确认。
 
-```bash
-bun <this-skill>/scripts/workflow-state.ts init <article-dir> --mode <mode>
-bun <this-skill>/scripts/workflow-state.ts show <article-dir>
-```
+微信封面使用 `imgs/cover.png`，XHS 使用 `imgs/cover-xhs.png` 或显式 `xhsCoverImage`；不互相替代。抖音标题和正文单独放入 `douyin/douyin-caption.md`，不回写文章。
 
-The state lives at `<article-dir>/.just-write/workflow.json`. Treat missing artifacts reported by `show` as drift: stop and locate or regenerate them instead of guessing.
+文件名只清理非法路径字符、换行、两端空白和末尾句点，显示标题保持原样。仅在请求需要时重命名目录或文件；目标存在时不得覆盖。
 
-After a successful operation, update the artifact, title, stage, or platform status with the matching command. Never advance state before the filesystem or publishing operation succeeds. Mark a platform `failed` when its attempted operation fails.
+## 持久状态按需启用
 
-Managed layout:
+短段润色和一次性编辑无需状态。需要续作、跨阶段或多平台产物管理时，使用：
 
 ```text
-<article-dir>/
-├── <title>.md
-├── <title>-formatted.md
-├── imgs/
-│   ├── cover.png
-│   └── cover-xhs.png
-├── xhs/
-│   ├── 01-cover.png
-│   ├── caption.md
-│   ├── preview.html
-│   └── render-report.json
-├── douyin/
-│   └── douyin-caption.md
-└── .just-write/
-    └── workflow.json
+bun <本技能目录>/scripts/workflow-state.ts init <文章目录> --mode <mode>
+bun <本技能目录>/scripts/workflow-state.ts show <文章目录>
 ```
 
-## Title and publishing rules
+在平台动作或产物复用前检查本次所需依赖；只有实际操作完成才登记对应完成阶段。文件存在不等于阶段完成，哈希改变不等于新授权。状态和 v1 迁移操作见 [工作流状态](references/workflow-state.md)，只在使用或恢复状态时读取。
 
-- Confirm and lock the article title before generating platform assets. Reuse it verbatim for the source article, formatted article, WeChat, Xiaohongshu cover, and Xiaohongshu `caption.md`.
-- Use `imgs/cover.png` only for WeChat and `imgs/cover-xhs.png` only for Xiaohongshu. Never substitute one platform's conventional cover for the other.
-- Store a separate Douyin title in `titles.douyin`. It may satisfy Douyin limits without changing the article title. Lock it as part of Douyin publish confirmation.
-- Require an explicit WeChat confirmation immediately before saving the WeChat draft.
-- Require an explicit Douyin confirmation immediately before a real upload. Without it, run `--dry-run` only.
-- Xiaohongshu is materials-only. Never open its creator platform, upload, fill forms, or click publish.
+推荐沿用现有布局，不为轻任务强制创建所有目录：
 
-## Full mode
+```text
+<文章目录>/
+├── <标题>.md
+├── <标题>-formatted.md
+├── imgs/cover.png
+├── imgs/cover-xhs.png
+├── xhs/                 # PNG、caption.md、preview.html、render-report.json
+├── douyin/douyin-caption.md
+└── .just-write/workflow.json
+```
 
-Prefix every full-mode response with the current label. Stop at each checkpoint until the exact confirmation is received.
+## 操作与交付
 
-1. `[Step 1: 选题讨论]` — Load `brainstorming`; confirm with `确认选题`.
-2. `[Step 2: 内容生成]` — Load `writing-style`, enforce its material gate, build the material card, choose an article archetype, and draft into the article directory. Before drafting, define the scope each central judgment can support from the available evidence. State the judgment directly within that scope, place any limit that changes the reader's interpretation beside the relevant claim, and do not preempt hypothetical objections. If material is insufficient, do not produce a long article: research, ask at most three questions in one message, or deliver a short piece as the gate specifies, and explain the choice. Do not load `humanizer-zh` during the first draft. Put factual image placeholders inline as `![描述](imgs/name.png)`. On `确认内容`, immediately list first-party screenshot sources.
-3. `[Step 3: 润色]` — Load `writing-style` and follow `references/quality-check.md` in its seven-pass order. Check defensive prose by function: remove sentences that only answer imagined criticism; express necessary limits as concrete scope next to the claim. If a judgment is too broad, narrow it before adding caveats. Verify that the edit preserves source attribution, numbers, causality, and real uncertainty. In pass five, load `humanizer-zh` and run `bun <humanizer-zh>/scripts/check-prose.ts <draft.md>` until hard failures are zero. Then complete the four-layer audit and its compact report; confirm with `确认润色`.
-4. `[Step 4: 排版优化]` — 加载 `baoyu-format-markdown` 及其 `references/reading-layout.md`，按语义组织段落、重点和明确换行，输出 `<title>-formatted.md`。仅在标题尚未锁定时生成 4–5 个候选；以 `确认排版：X号` 确认，或保留用户已明确指定的标题。
-5. `[Step 5: 配图与发布确认]` — 锁定选定标题，重命名目录和同名 Markdown 文件且不覆盖已有文件，核对 `imgs/cover.png` 和正文图片，用 `baoyu-post-to-wechat/scripts/wechat-preview.ts` 生成本地手机预览，检查阅读密度和截图文字，再以 `确认发布微信` 确认发布。
-6. `[Step 6: 发布]` — Load `baoyu-post-to-wechat`. After a successful WeChat draft, optionally offer Xiaohongshu materials when its config has `enabled: true`, then optionally offer Douyin.
+本地准备在已请求范围内直接完成。微信保存草稿和抖音上传使用用户已给出的明确授权，不重复索取；只有新操作、目标账号或范围不明时才确认。XHS 本技能始终只产出本地文件。
 
-If a rename target exists, stop without overwriting. Remove only illegal path characters (`< > : " / \\ | ? *`), line breaks, surrounding whitespace, and trailing periods from filesystem names; keep the locked display title unchanged.
-
-## Direct modes
-
-- `polish`: load `writing-style` and revise in the seven-pass order from `references/quality-check.md`, first rescuing the person and material, then applying the Step 3 defensive-prose check and loading `humanizer-zh` in pass five. Run `check-prose.ts` until hard failures are zero, write the requested result, update state, and report the artifact. Do not ask for topic or publishing confirmation.
-- `format`：按共用手机阅读规则排版，保留锁定或明确指定的标题，否则生成标题候选。仅在用户接着要求生成平台素材且标题未确认时确认标题。
-- `wechat_publish`: require a formatted article, locked article title, cover/body assets, and `确认发布微信`; then load `baoyu-post-to-wechat`.
-- `xhs_materials`: require a formatted article, locked article title, and `imgs/cover-xhs.png` when a custom cover is expected; render into `<article-dir>/xhs`, update XHS status to `generated`, and stop with local paths.
-- `douyin_sync`: require `<article-dir>/xhs` and `<article-dir>/douyin/douyin-caption.md`; validate the independent title/body/topics, dry-run by default, and require `确认发布抖音` for upload.
-
-## State transitions
-
-Use these stages: `topic → draft → polish → format → assets → publish → complete`. Direct modes may enter at their relevant stage, but completed stages must describe operations that actually happened. Platform statuses use `not_started`, `ready`, `generated`, `dry_run`, `published`, or `failed`.
+平台报告区分“已保存草稿”“已预填待交接”“已发布”“结果待核验”。未知结果先核对，不能重做提交来证明成功。交付文章或文件链接、重要改动及未解决问题；不输出每阶段仪式性检查表。
 
 ---
 
-Adapted from KKKKhazix/human-writing (MIT) for the material gate and ordered revision timing.
+材料判断与修稿时序部分参考 KKKKhazix/human-writing（MIT），按本项目任务边界改编。

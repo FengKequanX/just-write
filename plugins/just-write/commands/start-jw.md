@@ -1,8 +1,8 @@
 ---
-description: 启动 Just Write 完整写作流程
-argument-hint: "[想写的主题或想法]"
+description: 按当前需求启动 Just Write 写作与文章处理流程
+argument-hint: "[主题、材料或需要处理的文章]"
 ---
 
-Load `just-write` and enter its `full` mode for: @$1
+加载 `just-write`，处理：@$1
 
-Start at `[Step 1: 选题讨论]`. If the topic and angle are already concrete, summarize them and present the `确认选题` checkpoint without asking redundant questions. Follow the state, title, asset, and publishing rules in the skill exactly.
+从请求识别主 mode 和已明确的组合任务。材料、读者和目标充分时直接完成；仅在实质歧义或用户要求逐步协作时讨论。自然语言确认及已有授权有效，遵循内容、产物与平台操作边界。

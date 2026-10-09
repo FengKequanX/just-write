@@ -2,8 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createHash } from 'node:crypto';
+import { operationResult, platformExitCode, PlatformCliError, type PlatformOperationResult } from '../../../lib/platform-result';
 import { loadWechatExtendConfig, resolveAccount, loadCredentials } from "./wechat-extend-config.ts";
 import { resolveWechatCoverPath } from "./wechat-cover.ts";
+import { ensureTitleAgreement, readWechatMetadata } from './wechat-cli';
 import { buildWechatBodyImageTag } from "./wechat-typography.ts";
 import {
   type WechatUploadAsset,
@@ -47,7 +50,7 @@ interface MarkdownRenderResult {
 
 type ArticleType = "news" | "newspic";
 
-interface ArticleOptions {
+export interface ArticleOptions {
   title: string;
   author?: string;
   digest?: string;
@@ -75,12 +78,12 @@ async function fetchAccessToken(appId: string, appSecret: string): Promise<strin
     if (data.errcode === 40164) {
       const ipMatch = data.errmsg?.match(/invalid ip\s+([\d.:]+)/i);
       const ip = ipMatch ? ipMatch[1] : "unknown";
-      throw new Error(
+      throw new PlatformCliError(
         `IP白名单错误: 当前IP (${ip}) 不在白名单中。\n` +
-        `请在 mp.weixin.qq.com → 设置与开发 → 基本配置 → IP白名单 中添加该IP。`
+        `请在 mp.weixin.qq.com → 设置与开发 → 基本配置 → IP白名单 中添加该IP。`, 1
       );
     }
-    throw new Error(`Access token error ${data.errcode}: ${data.errmsg}`);
+    throw new PlatformCliError(`获取令牌被拒绝 ${data.errcode}: ${data.errmsg}`, 1);
   }
   if (!data.access_token) {
     throw new Error("No access_token in response");
@@ -283,20 +286,22 @@ async function uploadToWechat(
 
   const data = await res.json() as UploadResponse;
   if (data.errcode && data.errcode !== 0) {
-    throw new Error(`Upload failed ${data.errcode}: ${data.errmsg}`);
+    throw new PlatformCliError(`图片上传被微信拒绝 ${data.errcode}: ${data.errmsg}`, 1);
   }
 
   return data;
 }
 
-async function uploadImagesInHtml(
+export async function uploadImagesInHtml(
   html: string,
   accessToken: string,
   baseDir: string,
   contentImages: ImageInfo[] = [],
   articleType: ArticleType = "news",
   collectNewsCoverFallback: boolean = false,
+  dependencies: { upload?: typeof uploadImage } = {},
 ): Promise<{ html: string; firstCoverMediaId: string; imageMediaIds: string[] }> {
+  const upload = dependencies.upload ?? uploadImage;
   const imgRegex = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
   const matches = [...html.matchAll(imgRegex)];
 
@@ -314,13 +319,11 @@ async function uploadImagesInHtml(
     if (!src) continue;
 
     if (src.startsWith("https://mmbiz.qpic.cn")) {
-      if (collectNewsCoverFallback && !firstCoverMediaId) {
-        try {
-          const coverResp = await uploadImage(src, accessToken, baseDir, "material");
-          firstCoverMediaId = coverResp.media_id;
-        } catch (err) {
-          console.error(`[wechat-api] Failed to reuse existing WeChat image as cover: ${src}`, err);
-        }
+      if (articleType === 'newspic' || collectNewsCoverFallback && !firstCoverMediaId) {
+        const material = await upload(src, accessToken, baseDir, 'material');
+        if (typeof material.media_id !== 'string' || !material.media_id.trim()) throw new Error('图片素材上传未返回有效 ID');
+        if (articleType === 'newspic') imageMediaIds.push(material.media_id);
+        if (collectNewsCoverFallback && !firstCoverMediaId) firstCoverMediaId = material.media_id;
       }
       continue;
     }
@@ -333,9 +336,10 @@ async function uploadImagesInHtml(
       let resp = uploadedBySource.get(imagePath);
       if (!resp) {
         // 正文图片使用 media/uploadimg 接口获取 URL
-        resp = await uploadImage(imagePath, accessToken, baseDir, "body");
+        resp = await upload(imagePath, accessToken, baseDir, "body");
         uploadedBySource.set(imagePath, resp);
       }
+      if (typeof resp.url !== 'string' || !resp.url.trim()) throw new Error('正文图片上传未返回有效 URL');
       const newTag = fullTag
         .replace(/\ssrc=["'][^"']+["']/, ` src="${resp.url}"`)
         .replace(/\sdata-local-path=["'][^"']+["']/, "");
@@ -344,9 +348,10 @@ async function uploadImagesInHtml(
       if (shouldUploadMaterial) {
         let materialResp = uploadedBySource.get(`${imagePath}:material`);
         if (!materialResp) {
-          materialResp = await uploadImage(imagePath, accessToken, baseDir, "material");
+          materialResp = await upload(imagePath, accessToken, baseDir, "material");
           uploadedBySource.set(`${imagePath}:material`, materialResp);
         }
+        if (typeof materialResp.media_id !== 'string' || !materialResp.media_id.trim()) throw new Error('图片素材上传未返回有效 ID');
         if (articleType === "newspic" && materialResp.media_id) {
           imageMediaIds.push(materialResp.media_id);
         }
@@ -355,7 +360,8 @@ async function uploadImagesInHtml(
         }
       }
     } catch (err) {
-      console.error(`[wechat-api] Failed to upload ${imagePath}:`, err);
+      console.error('[wechat-api] 正文图片上传未完成，停止创建草稿');
+      throw err;
     }
   }
 
@@ -369,9 +375,10 @@ async function uploadImagesInHtml(
       let resp = uploadedBySource.get(imagePath);
       if (!resp) {
         // 正文图片使用 media/uploadimg 接口获取 URL
-        resp = await uploadImage(imagePath, accessToken, baseDir, "body");
+        resp = await upload(imagePath, accessToken, baseDir, "body");
         uploadedBySource.set(imagePath, resp);
       }
+      if (typeof resp.url !== 'string' || !resp.url.trim()) throw new Error('正文图片上传未返回有效 URL');
 
       const replacementTag = buildWechatBodyImageTag(resp.url);
       updatedHtml = replaceAllPlaceholders(updatedHtml, image.placeholder, replacementTag);
@@ -379,9 +386,10 @@ async function uploadImagesInHtml(
       if (shouldUploadMaterial) {
         let materialResp = uploadedBySource.get(`${imagePath}:material`);
         if (!materialResp) {
-          materialResp = await uploadImage(imagePath, accessToken, baseDir, "material");
+          materialResp = await upload(imagePath, accessToken, baseDir, "material");
           uploadedBySource.set(`${imagePath}:material`, materialResp);
         }
+        if (typeof materialResp.media_id !== 'string' || !materialResp.media_id.trim()) throw new Error('图片素材上传未返回有效 ID');
         if (articleType === "newspic" && materialResp.media_id) {
           imageMediaIds.push(materialResp.media_id);
         }
@@ -390,19 +398,15 @@ async function uploadImagesInHtml(
         }
       }
     } catch (err) {
-      console.error(`[wechat-api] Failed to upload placeholder ${image.placeholder}:`, err);
+      console.error('[wechat-api] 正文占位图片上传未完成，停止创建草稿');
+      throw err;
     }
   }
 
   return { html: updatedHtml, firstCoverMediaId, imageMediaIds };
 }
 
-async function publishToDraft(
-  options: ArticleOptions,
-  accessToken: string
-): Promise<PublishResponse> {
-  const url = `${DRAFT_URL}?access_token=${accessToken}`;
-
+export function buildDraftArticle(options: ArticleOptions): Record<string, unknown> {
   let article: Record<string, unknown>;
 
   const noc = options.needOpenComment ?? 1;
@@ -437,20 +441,67 @@ async function publishToDraft(
     if (options.digest) article.digest = options.digest;
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ articles: [article] }),
+  return article;
+}
+
+function bodyImageIdentities(html: string): string[] {
+  return [...html.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)].map(match => {
+    const value = match[1]!.replace(/&amp;/g, '&');
+    try {
+      const url = new URL(value);
+      // 微信 CDN 的排印参数不改变图片身份；其他查询参数可能是图片 ID，不能一概删除。
+      if (url.hostname === 'mmbiz.qpic.cn') for (const key of ['wx_fmt', 'from', 'wxfrom', 'wx_lazy', 'tp']) url.searchParams.delete(key);
+      url.searchParams.sort();
+      return `${url.host}${url.pathname}${url.search}`;
+    } catch { return value; }
   });
+}
 
-  const data = await res.json() as PublishResponse;
-  if (data.errcode && data.errcode !== 0) {
-    throw new Error(`Publish failed ${data.errcode}: ${data.errmsg}`);
+export function compareDraftArticle(expected: Record<string, unknown>, actual: Record<string, unknown>): boolean {
+  const text = (value: unknown) => htmlToPlainText(String(value ?? '')).replace(/\s+/g, ' ').trim();
+  if (actual.title !== expected.title || text(actual.content) !== text(expected.content)) return false;
+  if (expected.digest && actual.digest !== expected.digest) return false;
+  if (expected.author && actual.author !== expected.author) return false;
+  if (actual.article_type && actual.article_type !== expected.article_type) return false;
+  if (expected.thumb_media_id && actual.thumb_media_id !== expected.thumb_media_id) return false;
+  if (expected.image_info) {
+    const ids = (value: unknown) => ((value as { image_list?: { image_media_id?: string }[] } | undefined)?.image_list ?? []).map(image => image.image_media_id);
+    if (JSON.stringify(ids(actual.image_info)) !== JSON.stringify(ids(expected.image_info))) return false;
   }
+  return JSON.stringify(bodyImageIdentities(String(actual.content ?? ''))) === JSON.stringify(bodyImageIdentities(String(expected.content ?? '')));
+}
 
-  return data;
+/** draft/add 至多调用一次；拿到 ID 后，即使读回失败也保留已保存事实。 */
+export async function saveDraftWithVerification(
+  options: ArticleOptions, accessToken: string,
+  dependencies: { request?: typeof fetch; account?: string } = {},
+): Promise<PlatformOperationResult> {
+  const request = dependencies.request ?? fetch;
+  const article = buildDraftArticle(options);
+  const details = { account: dependencies.account, inputDigest: createHash('sha256').update(JSON.stringify(article)).digest('hex'),
+    inputSummary: { title: options.title, articleType: options.articleType, contentLength: options.content.length } };
+  let data: PublishResponse;
+  try {
+    const response = await request(`${DRAFT_URL}?access_token=${accessToken}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ articles: [article] }) });
+    if (!response.ok) return operationResult('wechat', 'save_draft', 'outcome_unknown', { ...details, verification: 'unverified', message: `草稿提交 HTTP ${response.status}，请先核对草稿箱` });
+    data = await response.json() as PublishResponse;
+  } catch {
+    return operationResult('wechat', 'save_draft', 'outcome_unknown', { ...details, verification: 'unverified', message: '草稿提交连接或响应异常，请先核对草稿箱，勿重复创建' });
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return operationResult('wechat', 'save_draft', 'outcome_unknown', { ...details, verification: 'unverified', message: '草稿响应格式无法确认，请先核对草稿箱' });
+  if (data.errcode) return operationResult('wechat', 'save_draft', 'failed', { ...details, message: `微信拒绝草稿：${data.errcode} ${data.errmsg ?? ''}` });
+  if (typeof data.media_id !== 'string' || !data.media_id.trim()) return operationResult('wechat', 'save_draft', 'outcome_unknown', { ...details, verification: 'unverified', message: '未收到有效草稿 ID，请先核对草稿箱' });
+  const saved = operationResult('wechat', 'save_draft', 'draft_saved', { ...details, receipt: { kind: 'api', id: data.media_id }, verification: 'unverified' });
+  try {
+    const response = await request(`https://api.weixin.qq.com/cgi-bin/draft/get?access_token=${accessToken}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ media_id: data.media_id }),
+    });
+    if (!response.ok) return { ...saved, message: `草稿已保存；读回 HTTP ${response.status}，请核对已有 ID` };
+    const readback = await response.json() as { errcode?: number; news_item?: Record<string, unknown>[] };
+    if (readback.errcode || !readback.news_item?.[0]) return { ...saved, message: '草稿已保存；读回无有效文章，请核对已有 ID' };
+    return { ...saved, verification: compareDraftArticle(article, readback.news_item[0]) ? 'verified' : 'mismatch',
+      message: compareDraftArticle(article, readback.news_item[0]) ? '草稿已保存，标题、正文及图片身份读回一致' : '草稿已保存，但读回内容不一致；请核对已有 ID' };
+  } catch { return { ...saved, message: '草稿已保存；读回失败，请核对已有 ID，勿重复创建' }; }
 }
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
@@ -487,21 +538,22 @@ function renderMarkdownWithPlaceholders(
   const mdToWechatScript = path.join(__dirname, "md-to-wechat.ts");
   const baseDir = path.dirname(markdownPath);
 
-  const args = ["-y", "bun", mdToWechatScript, markdownPath];
+  const args = [mdToWechatScript, markdownPath];
   if (title) args.push("--title", title);
   if (theme) args.push("--theme", theme);
   if (color) args.push("--color", color);
   if (!citeStatus) args.push("--no-cite");
 
   console.error(`[wechat-api] Rendering markdown with placeholders via md-to-wechat: ${theme}${color ? `, color: ${color}` : ""}, citeStatus: ${citeStatus}`);
-  const result = spawnSync("npx", args, {
+  const runtime = process.versions.bun ? process.execPath : 'bun';
+  const result = spawnSync(runtime, args, {
     stdio: ["inherit", "pipe", "pipe"],
     cwd: baseDir,
   });
 
   if (result.error) {
     throw new Error(
-      `Markdown render failed: 无法运行 npx。请确保已安装 Node.js。\n` +
+      `Markdown 渲染失败：无法运行已安装的 Bun。\n` +
       `Details: ${result.error.message}`
     );
   }
@@ -537,73 +589,44 @@ function extractHtmlContent(htmlPath: string): string {
 }
 
 function printUsage(): never {
-  console.log(`Publish article to WeChat Official Account draft using API
-
-Usage:
-  npx -y bun wechat-api.ts <file> [options]
-
-Arguments:
-  file                Markdown (.md) or HTML (.html) file
-
-Options:
-  --type <type>       Article type: news (文章, default) or newspic (图文)
-  --title <title>     Override title
-  --author <name>     Author name (max 16 chars)
-  --summary <text>    Article summary/digest (max 128 chars)
-  --theme <name>      Theme name for markdown (default, grace, simple, modern). Default: default
-  --color <name|hex>  Primary color (blue, green, vermilion, etc. or hex)
-  --cover <path>      Cover image path (local or URL)
-  --account <alias>   Select account by alias (for multi-account setups)
-  --no-cite           Disable bottom citations for ordinary external links in markdown mode
-  --dry-run           Parse and render only, don't publish
-  --help              Show this help
-
-Frontmatter Fields (markdown):
-  title               Article title
-  author              Author name
-  digest/summary      Article summary
-  coverImage/featureImage/cover/image   Cover image path
-
-Comments:
-  Comments are enabled by default, open to all users.
-
-Environment Variables:
-  WECHAT_APP_ID       WeChat App ID
-  WECHAT_APP_SECRET   WeChat App Secret
-
-Config File Locations (in priority order):
-  1. Environment variables
-  2. <cwd>/.baoyu-skills/.env
-  3. ~/.baoyu-skills/.env
-
-Example:
-  npx -y bun wechat-api.ts article.md
-  npx -y bun wechat-api.ts article.md --theme grace --cover cover.png
-  npx -y bun wechat-api.ts article.md --author "Author Name" --summary "Brief intro"
-  npx -y bun wechat-api.ts article.html --title "My Article"
-  npx -y bun wechat-api.ts images/ --type newspic --title "Photo Album"
-  npx -y bun wechat-api.ts article.md --dry-run
-  npx -y bun wechat-api.ts article.md --no-cite
-`);
+  console.log(`微信草稿 API 专用入口（兼容默认保存草稿）。
+用法：bun wechat-api.ts <markdown.md|article.html> [选项]
+  --type <news|newspic>  文章类型，默认 news
+  --title <text>        平台标题，最多 64 字符
+  --author <name>       作者，最多 16 字符
+  --summary <text>      摘要，最多 120 字符，超限报错
+  --theme <name>        主题；CLI > frontmatter > 账号/全局配置 > default
+  --color <name|hex>    主色；使用相同配置优先级
+  --cover <path|url>    微信独立封面
+  --account <alias>     明确选择目标账号
+  --no-cite             关闭普通外链的文末引用
+  --save-draft          显式声明保存草稿
+  --dry-run             离线解析与预览，不读取凭证
+  --json                JSON 输出（保留旧字段并追加 result）
+  --help                帮助
+--save-draft 与 --dry-run 互斥。
+保存后读回核对；读回异常保留草稿 ID，不能重复创建来核验。
+退出码：0 成功；1 平台拒绝；2 参数/运行错误；3 保存结果或验证待核验。`);
   process.exit(0);
 }
-
-interface CliArgs {
+export interface CliArgs {
   filePath: string;
   isHtml: boolean;
   articleType: ArticleType;
   title?: string;
   author?: string;
   summary?: string;
-  theme: string;
+  theme?: string;
   color?: string;
   cover?: string;
   account?: string;
   citeStatus: boolean;
   dryRun: boolean;
+  saveDraft: boolean;
+  json: boolean;
 }
 
-function parseArgs(argv: string[]): CliArgs {
+export function parseArgs(argv: string[]): CliArgs {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
     printUsage();
   }
@@ -612,18 +635,21 @@ function parseArgs(argv: string[]): CliArgs {
     filePath: "",
     isHtml: false,
     articleType: "news",
-    theme: "default",
     citeStatus: true,
     dryRun: false,
+    saveDraft: false,
+    json: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
+    if (['--type', '--title', '--author', '--summary', '--theme', '--color', '--cover', '--account'].includes(arg) &&
+      (argv[i + 1] === undefined || argv[i + 1]!.startsWith('--'))) throw new Error(`参数缺少值：${arg}`);
     if (arg === "--type" && argv[i + 1]) {
       const t = argv[++i]!.toLowerCase();
       if (t === "news" || t === "newspic") {
         args.articleType = t;
-      }
+      } else throw new Error(`无效文章类型：${t}`);
     } else if (arg === "--title" && argv[i + 1]) {
       args.title = argv[++i];
     } else if (arg === "--author" && argv[i + 1]) {
@@ -644,17 +670,17 @@ function parseArgs(argv: string[]): CliArgs {
       args.citeStatus = false;
     } else if (arg === "--dry-run") {
       args.dryRun = true;
-    } else if (arg.startsWith("--") && argv[i + 1] && !argv[i + 1]!.startsWith("-")) {
-      i++;
-    } else if (!arg.startsWith("-")) {
+    } else if (arg === '--save-draft') args.saveDraft = true;
+    else if (arg === '--json') args.json = true;
+    else if (!arg.startsWith("-") && !args.filePath) {
       args.filePath = arg;
-    }
+    } else throw new Error(`未知参数或参数缺少值：${arg}`);
   }
 
   if (!args.filePath) {
-    console.error("Error: File path required");
-    process.exit(1);
+    throw new Error('需要正文文件路径');
   }
+  if (args.dryRun && args.saveDraft) throw new Error('--dry-run 与 --save-draft 互斥');
 
   args.isHtml = args.filePath.toLowerCase().endsWith(".html");
 
@@ -669,13 +695,15 @@ function extractHtmlTitle(html: string): string {
   return "";
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2)): Promise<number> {
+  const args = parseArgs(argv);
+  const extConfig = loadWechatExtendConfig();
+  const resolved = resolveAccount(extConfig, args.account, { offline: args.dryRun });
 
   const filePath = path.resolve(args.filePath);
+  ensureTitleAgreement(readWechatMetadata(args.isHtml ? filePath.replace(/\.html$/i, '.md') : filePath), args.title);
   if (!fs.existsSync(filePath)) {
-    console.error(`Error: File not found: ${filePath}`);
-    process.exit(1);
+    throw new Error(`文件不存在：${filePath}`);
   }
 
   const baseDir = path.dirname(filePath);
@@ -709,6 +737,9 @@ async function main(): Promise<void> {
     frontmatter = parsed.frontmatter;
     const body = parsed.body;
 
+    args.theme = args.theme ?? frontmatter.theme ?? resolved.default_theme ?? 'default';
+    args.color = args.color ?? frontmatter.color ?? resolved.default_color;
+
     title = title || frontmatter.title || "";
     if (!title) {
       const h1Match = body.match(/^#\s+(.+)$/m);
@@ -730,15 +761,12 @@ async function main(): Promise<void> {
   }
 
   if (!title) {
-    console.error("Error: No title found. Provide via --title, frontmatter, or <title> tag.");
-    process.exit(1);
+    throw new Error('没有标题，请通过 --title、frontmatter 或 H1 提供');
   }
+  if (title.length > 64) throw new Error(`标题超出 64 字符：${title.length}`);
 
   if (digest && digest.length > 120) {
-    const truncated = digest.slice(0, 117);
-    const lastPunct = Math.max(truncated.lastIndexOf("。"), truncated.lastIndexOf("，"), truncated.lastIndexOf("；"), truncated.lastIndexOf("、"));
-    digest = lastPunct > 80 ? truncated.slice(0, lastPunct + 1) : truncated + "...";
-    console.error(`[wechat-api] Digest truncated to ${digest.length} chars`);
+    throw new Error(`摘要超出 120 字符：${digest.length}；请调整摘要，不自动截断`);
   }
 
   console.error(`[wechat-api] Title: ${title}`);
@@ -746,11 +774,13 @@ async function main(): Promise<void> {
   if (digest) console.error(`[wechat-api] Digest: ${digest.slice(0, 50)}...`);
   console.error(`[wechat-api] Type: ${args.articleType}`);
 
-  const extConfig = loadWechatExtendConfig();
-  const resolved = resolveAccount(extConfig, args.account);
   if (resolved.name) console.error(`[wechat-api] Account: ${resolved.name} (${resolved.alias})`);
 
   if (!author && resolved.default_author) author = resolved.default_author;
+  if (author.length > 16) throw new Error(`作者名超出 16 字符：${author.length}`);
+  for (const key of ['need_open_comment', 'only_fans_can_comment']) {
+    if (frontmatter[key] !== undefined && !/^[01]$/.test(frontmatter[key]!)) throw new Error(`${key} 必须为 0 或 1`);
+  }
 
   const rawCoverPath = args.cover ||
     frontmatter.coverImage ||
@@ -773,8 +803,10 @@ async function main(): Promise<void> {
       placeholderImageCount: contentImages.length || undefined,
       coverPath,
       account: resolved.alias || undefined,
+      accountSource: resolved.source,
+      result: operationResult('wechat', 'validate', 'dry_run', { account: resolved.alias ?? resolved.source }),
     }, null, 2));
-    return;
+    return 0;
   }
 
   const creds = loadCredentials(resolved);
@@ -813,17 +845,15 @@ async function main(): Promise<void> {
   }
 
   if (args.articleType === "news" && !thumbMediaId) {
-    console.error("Error: No cover image. Provide via --cover, frontmatter.coverImage, or include an image in content.");
-    process.exit(1);
+    throw new Error('需要封面：请通过 --cover、frontmatter 或正文图片提供');
   }
 
   if (args.articleType === "newspic" && imageMediaIds.length === 0) {
-    console.error("Error: newspic requires at least one image in content.");
-    process.exit(1);
+    throw new Error('newspic 需要至少一张正文图片');
   }
 
   console.error("[wechat-api] Publishing to draft...");
-  const result = await publishToDraft({
+  const result = await saveDraftWithVerification({
     title,
     author: author || undefined,
     digest: digest || undefined,
@@ -831,21 +861,23 @@ async function main(): Promise<void> {
     thumbMediaId,
     articleType: args.articleType,
     imageMediaIds: args.articleType === "newspic" ? imageMediaIds : undefined,
-    needOpenComment: resolved.need_open_comment,
-    onlyFansCanComment: resolved.only_fans_can_comment,
-  }, accessToken);
+    needOpenComment: frontmatter.need_open_comment !== undefined ? Number(frontmatter.need_open_comment) : resolved.need_open_comment,
+    onlyFansCanComment: frontmatter.only_fans_can_comment !== undefined ? Number(frontmatter.only_fans_can_comment) : resolved.only_fans_can_comment,
+  }, accessToken, { account: resolved.alias ?? resolved.source });
 
   console.log(JSON.stringify({
-    success: true,
-    media_id: result.media_id,
+    success: result.status === 'draft_saved',
+    media_id: result.receipt?.id,
     title,
     articleType: args.articleType,
+    result,
   }, null, 2));
 
-  console.error(`[wechat-api] Published successfully! media_id: ${result.media_id}`);
+  console.error(`[wechat-api] ${result.message ?? result.status}`);
+  return platformExitCode(result);
 }
 
-await main().catch((err) => {
+if (import.meta.main) await main().then(code => { process.exitCode = code; }).catch((err) => {
   console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
+  process.exitCode = err instanceof PlatformCliError ? err.exitCode : 2;
 });

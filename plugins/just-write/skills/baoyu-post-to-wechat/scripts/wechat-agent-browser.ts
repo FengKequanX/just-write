@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { finishBrowserDraft } from './wechat-save-draft';
+import { platformExitCode, type PlatformOperationResult } from '../../../lib/platform-result';
 
 const WECHAT_URL = 'https://mp.weixin.qq.com/';
 const SESSION = 'wechat-post';
@@ -107,7 +109,7 @@ interface WeChatOptions {
   keepOpen?: boolean;
 }
 
-async function postToWeChat(options: WeChatOptions): Promise<void> {
+export async function postToWeChat(options: WeChatOptions): Promise<PlatformOperationResult> {
   const { title, content, images, submit = false, keepOpen = true } = options;
 
   if (title.length > 20) throw new Error(`Title too long: ${title.length} chars (max 20)`);
@@ -273,19 +275,15 @@ async function postToWeChat(options: WeChatOptions): Promise<void> {
   console.log('[wechat] Content typed.');
   await sleep(1000);
 
-  if (submit) {
-    console.log('[wechat] Saving as draft...');
-    const submitRef = findElementByText(snapshot, 'js_submit') || findElementByText(snapshot, '保存');
-    if (submitRef) {
-      ab(['click', submitRef]);
-    } else {
-      ab(['eval', "document.querySelector('#js_submit')?.click()"]);
-    }
-    await sleep(3000);
-    console.log('[wechat] Draft saved!');
-  } else {
-    console.log('[wechat] Article composed (preview mode). Add --submit to save as draft.');
-  }
+  const result = await finishBrowserDraft(submit, {
+    evaluate: async expression => {
+      const raw = ab(['eval', expression], true);
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && 'data' in parsed) return (parsed as { data?: { result?: unknown } }).data?.result;
+      if (parsed && typeof parsed === 'object' && 'result' in parsed) return (parsed as { result?: unknown }).result;
+      return parsed;
+    }, wait: sleep,
+  }, { inputSummary: { title, contentLength: content.length, imageCount: images.length } });
 
   if (!keepOpen) {
     console.log('[wechat] Closing browser...');
@@ -293,6 +291,7 @@ async function postToWeChat(options: WeChatOptions): Promise<void> {
   } else {
     console.log('[wechat] Done. Browser window left open.');
   }
+  return result;
 }
 
 function printUsage(): never {
@@ -305,7 +304,9 @@ Options:
   --title <text>   Article title (max 20 chars, required)
   --content <text> Article content (max 1000 chars, required)
   --image <path>   Add image (can be repeated, 1+ images, required)
-  --submit         Save as draft (default: preview only)
+  --save-draft     明确保存草稿（默认只预填）
+  --submit         保存开关的兼容别名
+  --json           JSON 结果，日志写入 stderr
   --close          Close browser after operation (default: keep open)
   --help           Show this help
 
@@ -316,8 +317,7 @@ Examples:
   process.exit(0);
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+export async function main(args = process.argv.slice(2)): Promise<number> {
   if (args.includes('--help') || args.includes('-h')) printUsage();
 
   const images: string[] = [];
@@ -325,39 +325,43 @@ async function main(): Promise<void> {
   let keepOpen = true;
   let title: string | undefined;
   let content: string | undefined;
+  let json = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
+    if (['--image', '--title', '--content'].includes(arg) && (args[i + 1] === undefined || args[i + 1]!.startsWith('--'))) throw new Error(`参数缺少值：${arg}`);
     if (arg === '--image' && args[i + 1]) {
       images.push(args[++i]!);
     } else if (arg === '--title' && args[i + 1]) {
       title = args[++i];
     } else if (arg === '--content' && args[i + 1]) {
       content = args[++i];
-    } else if (arg === '--submit') {
+    } else if (arg === '--submit' || arg === '--save-draft') {
       submit = true;
+    } else if (arg === '--json') {
+      json = true;
     } else if (arg === '--close') {
       keepOpen = false;
-    }
+    } else throw new Error(`未知参数：${arg}`);
   }
 
   if (!title) {
-    console.error('Error: --title is required');
-    process.exit(1);
+    throw new Error('需要 --title');
   }
   if (!content) {
-    console.error('Error: --content is required');
-    process.exit(1);
+    throw new Error('需要 --content');
   }
   if (images.length === 0) {
-    console.error('Error: At least one --image is required');
-    process.exit(1);
+    throw new Error('需要至少一个 --image');
   }
 
-  await postToWeChat({ title, content, images, submit, keepOpen });
+  const originalLog = console.log;
+  if (json) console.log = console.error;
+  try { const result = await postToWeChat({ title, content, images, submit, keepOpen }); originalLog(JSON.stringify(result, null, 2)); return platformExitCode(result); }
+  finally { console.log = originalLog; }
 }
 
-await main().catch((err) => {
+if (import.meta.main) await main().then(code => { process.exitCode = code; }).catch((err) => {
   console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
+  process.exitCode = 2;
 });

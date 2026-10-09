@@ -1,0 +1,5 @@
+*.sh text eol=lf
+
+# 这两份测试输入保留 Markdown 显式换行和冻结原文的尾部空行。
+tests/fixtures/reading-review/mixed-structure.md whitespace=-blank-at-eol
+evals/skill-review/fixtures/format-only.md whitespace=-blank-at-eof

@@ -2,8 +2,11 @@
   "name": "just-write-workspace",
   "private": true,
   "scripts": {
-    "setup": "bun install --cwd plugins/just-write/skills/post-to-xhs/scripts --frozen-lockfile && bun install --cwd plugins/just-write/skills/baoyu-post-to-wechat/scripts --frozen-lockfile",
-    "test": "bun test plugins/just-write/lib plugins/just-write/skills/just-write/scripts plugins/just-write/skills/humanizer-zh/scripts plugins/just-write/skills/post-to-xhs/scripts plugins/just-write/skills/sync-to-douyin/scripts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-extend-config.test.ts plugins/just-write/skills/baoyu-post-to-wechat/scripts/wechat-typography.test.ts plugins/just-write/skills/baoyu-post-to-wechat/scripts/md-to-wechat.test.ts",
-    "check:contracts": "bun scripts/check-contracts.ts"
+    "setup": "bun install --cwd plugins/just-write/skills/post-to-xhs/scripts --frozen-lockfile && bun install --cwd plugins/just-write/skills/baoyu-post-to-wechat/scripts --frozen-lockfile && bun install --cwd plugins/just-write/skills/baoyu-format-markdown/scripts --frozen-lockfile && bun install --cwd plugins/just-write/skills/sync-to-douyin/scripts --frozen-lockfile",
+    "test": "bun run test:unit && bun run test:render",
+    "test:unit": "bun scripts/run-unit-tests.ts",
+    "test:render": "bun test plugins/just-write/skills/post-to-xhs/scripts/md-to-xhs.render.test.ts",
+    "check:contracts": "bun scripts/check-contracts.ts",
+    "qa:render": "bun scripts/render-review.ts"
   }
 }

@@ -12,6 +12,9 @@ import {
   sleep,
 } from './cdp.ts';
 import { loadWechatExtendConfig, resolveAccount } from './wechat-extend-config.ts';
+import { platformExitCode, type PlatformOperationResult } from '../../../lib/platform-result';
+import { finishBrowserDraft } from './wechat-save-draft';
+import { parseBrowserArgs, readWechatMetadata, ensureTitleAgreement } from './wechat-cli';
 
 const WECHAT_URL = 'https://mp.weixin.qq.com/';
 
@@ -52,54 +55,10 @@ function parseMarkdownFile(filePath: string): MarkdownMeta {
     if (trimmed.startsWith('![')) continue;
     if (trimmed.startsWith('---')) continue;
     paragraphs.push(trimmed);
-    if (paragraphs.join('\n').length > 1200) break;
   }
   content = paragraphs.join('\n');
 
   return { title, author, content };
-}
-
-function compressTitle(title: string, maxLen = 20): string {
-  if (title.length <= maxLen) return title;
-
-  const prefixes = ['如何', '为什么', '什么是', '怎样', '怎么', '关于'];
-  let t = title;
-  for (const p of prefixes) {
-    if (t.startsWith(p) && t.length > maxLen) {
-      t = t.slice(p.length);
-      if (t.length <= maxLen) return t;
-    }
-  }
-
-  const fillers = ['的', '了', '在', '是', '和', '与', '以及', '或者', '或', '还是', '而且', '并且', '但是', '但', '因为', '所以', '如果', '那么', '虽然', '不过', '然而', '——', '…'];
-  for (const f of fillers) {
-    if (t.length <= maxLen) break;
-    t = t.replace(new RegExp(f, 'g'), '');
-  }
-
-  if (t.length > maxLen) t = t.slice(0, maxLen);
-
-  return t;
-}
-
-function compressContent(content: string, maxLen = 1000): string {
-  if (content.length <= maxLen) return content;
-
-  const lines = content.split('\n');
-  const result: string[] = [];
-  let len = 0;
-
-  for (const line of lines) {
-    if (len + line.length + 1 > maxLen) {
-      const remaining = maxLen - len - 1;
-      if (remaining > 20) result.push(line.slice(0, remaining - 3) + '...');
-      break;
-    }
-    result.push(line);
-    len += line.length + 1;
-  }
-
-  return result.join('\n');
 }
 
 async function loadImagesFromDir(dir: string): Promise<string[]> {
@@ -111,7 +70,7 @@ async function loadImagesFromDir(dir: string): Promise<string[]> {
   return images;
 }
 
-interface WeChatBrowserOptions {
+export interface WeChatBrowserOptions {
   title?: string;
   content?: string;
   images?: string[];
@@ -121,9 +80,10 @@ interface WeChatBrowserOptions {
   timeoutMs?: number;
   profileDir?: string;
   chromePath?: string;
+  account?: string;
 }
 
-export async function postToWeChat(options: WeChatBrowserOptions): Promise<void> {
+export async function postToWeChat(options: WeChatBrowserOptions): Promise<PlatformOperationResult> {
   const { submit = false, timeoutMs = 120_000, profileDir = getDefaultProfileDir() } = options;
 
   let title = options.title || '';
@@ -147,15 +107,11 @@ export async function postToWeChat(options: WeChatBrowserOptions): Promise<void>
   }
 
   if (title.length > 20) {
-    const original = title;
-    title = compressTitle(title, 20);
-    console.log(`[wechat-browser] Title compressed: "${original}" → "${title}"`);
+    throw new Error(`标题超出 20 字符：${title.length}；请明确调整，不自动压缩`);
   }
 
   if (content.length > 1000) {
-    const original = content.length;
-    content = compressContent(content, 1000);
-    console.log(`[wechat-browser] Content compressed: ${original} → ${content.length} chars`);
+    throw new Error(`正文超出 1000 字符：${content.length}；请明确调整，不自动截断`);
   }
 
   if (!title) throw new Error('Title is required (use --title or --markdown)');
@@ -595,55 +551,12 @@ export async function postToWeChat(options: WeChatBrowserOptions): Promise<void>
     }
     await sleep(500);
 
-    if (submit) {
-      console.log('[wechat-browser] Saving as draft...');
-      const submitResult = await cdp.send<{ result: { value: string } }>('Runtime.evaluate', {
-        expression: `
-          (function() {
-            // Try new UI: find button by text
-            const allBtns = document.querySelectorAll('button');
-            for (const btn of allBtns) {
-              const text = btn.textContent?.trim();
-              if (text === '保存为草稿') {
-                btn.click();
-                return 'clicked:保存为草稿';
-              }
-            }
-            // Fallback: old UI selector
-            const oldBtn = document.querySelector('#js_submit');
-            if (oldBtn) {
-              oldBtn.click();
-              return 'clicked:#js_submit';
-            }
-            // List available buttons for debugging
-            const btnTexts = [];
-            allBtns.forEach(b => {
-              const t = b.textContent?.trim();
-              if (t && t.length < 20) btnTexts.push(t);
-            });
-            return 'not_found:' + btnTexts.join(',');
-          })()
-        `,
-        returnByValue: true,
-      }, { sessionId });
-      console.log(`[wechat-browser] Submit result: ${submitResult.result.value}`);
-      await sleep(3000);
-
-      // Verify save success by checking for toast
-      const toastCheck = await cdp.send<{ result: { value: string } }>('Runtime.evaluate', {
-        expression: `
-          const toasts = document.querySelectorAll('.weui-desktop-toast, [class*=toast]');
-          const msgs = [];
-          toasts.forEach(t => { const text = t.textContent?.trim(); if (text) msgs.push(text); });
-          JSON.stringify(msgs);
-        `,
-        returnByValue: true,
-      }, { sessionId });
-      console.log(`[wechat-browser] Toast messages: ${toastCheck.result.value}`);
-      console.log('[wechat-browser] Draft saved!');
-    } else {
-      console.log('[wechat-browser] Article composed (preview mode). Add --submit to save as draft.');
-    }
+    return await finishBrowserDraft(submit, {
+      evaluate: async expression => {
+        const response = await cdp!.send<{ result: { value: unknown } }>('Runtime.evaluate', { expression, returnByValue: true }, { sessionId });
+        return response.result.value;
+      }, wait: sleep,
+    }, { account: options.account, inputSummary: { title, contentLength: content.length, imageCount: images.length } });
   } finally {
     if (cdp) {
       cdp.close();
@@ -653,89 +566,44 @@ export async function postToWeChat(options: WeChatBrowserOptions): Promise<void>
 }
 
 function printUsage(): never {
-  console.log(`Post image-text (贴图) to WeChat Official Account
-
-Usage:
-  npx -y bun wechat-browser.ts [options]
-
-Options:
-  --markdown <path>  Markdown file for title/content extraction
-  --images <dir>     Directory containing images (PNG/JPG)
-  --title <text>     Article title (max 20 chars, auto-compressed)
-  --content <text>   Article content (max 1000 chars, auto-compressed)
-  --image <path>     Add image (can be repeated)
-  --submit           Save as draft (default: preview only)
-  --profile <dir>    Chrome profile directory
-  --account <alias>  Select account by alias (for multi-account setups)
-  --help             Show this help
-
-Examples:
-  npx -y bun wechat-browser.ts --markdown article.md --images ./photos/
-  npx -y bun wechat-browser.ts --title "测试" --content "内容" --image ./photo.png
-  npx -y bun wechat-browser.ts --markdown article.md --images ./photos/ --submit
-`);
+  console.log(`将图文预填到微信编辑器；默认不保存。
+用法：bun wechat-browser.ts [选项]
+  --markdown <path>  提取标题与图文正文
+  --title <text>     标题，最多 20 字符，超限报错
+  --content <text>   正文，最多 1000 字符，超限报错
+  --image <path>     图片，可重复
+  --images <dir>     图片目录
+  --profile <dir>    浏览器目录
+  --account <alias>  明确目标账号
+  --save-draft       明确保存草稿
+  --submit           保存开关的兼容别名
+  --json             JSON 结果，日志写入 stderr
+  --help             帮助
+退出码：0 预填完成；1 平台拒绝；2 参数/运行错误；3 保存或验证待核验。`);
   process.exit(0);
 }
-
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+export async function main(args = process.argv.slice(2)): Promise<number> {
   if (args.includes('--help') || args.includes('-h')) printUsage();
 
-  const images: string[] = [];
-  let submit = false;
-  let profileDir: string | undefined;
-  let title: string | undefined;
-  let content: string | undefined;
-  let markdownFile: string | undefined;
-  let imagesDir: string | undefined;
-  let accountAlias: string | undefined;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
-    if (arg === '--image' && args[i + 1]) {
-      images.push(args[++i]!);
-    } else if (arg === '--images' && args[i + 1]) {
-      imagesDir = args[++i];
-    } else if (arg === '--title' && args[i + 1]) {
-      title = args[++i];
-    } else if (arg === '--content' && args[i + 1]) {
-      content = args[++i];
-    } else if (arg === '--markdown' && args[i + 1]) {
-      markdownFile = args[++i];
-    } else if (arg === '--submit') {
-      submit = true;
-    } else if (arg === '--profile' && args[i + 1]) {
-      profileDir = args[++i];
-    } else if (arg === '--account' && args[i + 1]) {
-      accountAlias = args[++i];
-    }
-  }
-
+  const options = parseBrowserArgs(args, 'image');
+  ensureTitleAgreement(readWechatMetadata(options.markdownFile), options.title);
   const extConfig = loadWechatExtendConfig();
-  const resolved = resolveAccount(extConfig, accountAlias);
-  if (resolved.name) console.log(`[wechat-browser] Account: ${resolved.name} (${resolved.alias})`);
-
-  if (!profileDir && resolved.alias) {
-    profileDir = resolved.chrome_profile_path || getAccountProfileDir(resolved.alias);
-  }
-
-  if (!markdownFile && !title) {
-    console.error('Error: --title or --markdown is required');
-    process.exit(1);
-  }
-  if (!markdownFile && !content) {
-    console.error('Error: --content or --markdown is required');
-    process.exit(1);
-  }
-  if (images.length === 0 && !imagesDir) {
-    console.error('Error: --image or --images is required');
-    process.exit(1);
-  }
-
-  await postToWeChat({ title, content, images: images.length > 0 ? images : undefined, imagesDir, markdownFile, submit, profileDir });
+  const resolved = resolveAccount(extConfig, options.accountAlias);
+  if (!options.markdownFile && !options.title) throw new Error('需要 --title 或 --markdown');
+  if (!options.markdownFile && !options.content) throw new Error('需要 --content 或 --markdown');
+  if (!options.images.length && !options.imagesDir) throw new Error('需要 --image 或 --images');
+  const originalLog = console.log;
+  if (options.json) console.log = console.error;
+  try {
+    const result = await postToWeChat({ ...options,
+      profileDir: options.profileDir ?? resolved.chrome_profile_path ?? (resolved.alias ? getAccountProfileDir(resolved.alias) : undefined),
+      account: resolved.alias ?? resolved.source,
+    });
+    originalLog(JSON.stringify(result, null, 2)); return platformExitCode(result);
+  } finally { console.log = originalLog; }
 }
 
-await main().catch((err) => {
+if (import.meta.main) await main().then(code => { process.exitCode = code; }).catch((err) => {
   console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
+  process.exitCode = 2;
 });
